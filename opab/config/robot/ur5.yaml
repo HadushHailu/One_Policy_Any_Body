@@ -1,0 +1,24 @@
+# Universal Robots UR5 — 6-DoF industrial manipulator
+name: ur5
+urdf: assets/robots/ur5/ur5.xml
+n_joints: 6
+gripper_type: parallel_jaw
+
+dh_params:
+  - [0.0,     0.08946,  1.5708,  0.0]   # joint 1
+  - [-0.425,  0.0,      0.0,     0.0]   # joint 2
+  - [-0.39225, 0.0,     0.0,     0.0]   # joint 3
+  - [0.0,     0.10915,  1.5708,  0.0]   # joint 4
+  - [0.0,     0.09465, -1.5708,  0.0]   # joint 5
+  - [0.0,     0.0823,   0.0,     0.0]   # joint 6
+
+joint_limits:
+  lower: [-6.2832, -6.2832, -3.1416, -6.2832, -6.2832, -6.2832]
+  upper: [ 6.2832,  6.2832,  3.1416,  6.2832,  6.2832,  6.2832]
+
+workspace_radius: 0.85
+payload_kg: 5.0
+gripper_max_width: 0.08
+
+# Padding: UR5 has 6 joints, pad to 7 for uniform input
+pad_to_n_joints: 7

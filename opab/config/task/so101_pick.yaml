@@ -1,0 +1,35 @@
+# Pick-and-Place task on SO-101 (simulation)
+name: so101_pick
+task_type: pick_and_place
+
+env:
+  _target_: opab.env.mujoco_env_runner.MuJoCoEnvRunner
+  scene_xml: assets/scenes/tabletop_pick.xml
+  robot_xml: assets/robots/so101/so101.xml
+  fps: 10
+  max_episode_steps: 300
+  camera_names: [front, wrist]
+  image_size: 96
+
+objects:
+  - type: cube
+    size: 0.015     # smaller object for SO-101's smaller gripper
+    randomize_position: true
+    position_range: [[-0.03, 0.03], [-0.03, 0.03], [0.0, 0.0]]
+
+success:
+  type: object_in_zone
+  zone_position: [0.15, 0.0, 0.015]   # closer due to smaller workspace
+  zone_radius: 0.02
+  hold_time: 1.0
+
+domain_randomization:
+  visual:
+    camera_position_noise: 0.01
+    lighting_intensity_range: [0.5, 1.5]
+    table_color_randomize: true
+  dynamics:
+    joint_friction_scale: [0.7, 1.3]
+    link_mass_scale: [0.8, 1.2]
+    action_delay_steps: [0, 2]
+    gripper_friction_scale: [0.7, 1.3]

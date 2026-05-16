@@ -1,0 +1,17 @@
+# DPO-enhanced Morphology-Conditioned Diffusion Policy
+defaults:
+  - morphology_dp                 # inherit all base config
+
+name: morphology_dp_dpo
+_target_: opab.policy.dpo_diffusion.DPODiffusionPolicy
+
+# ---- DPO ----
+dpo:
+  beta: 0.1                      # KL penalty temperature
+  lr: 1.0e-5                     # lower than BC
+  num_epochs: 50
+  batch_size: 16                  # preference pairs
+  gradient_clip_norm: 1.0
+  num_likelihood_samples: 16     # Monte Carlo samples for ELBO
+  preference_data: null           # path to HDF5 preference pairs
+  reference_checkpoint: null      # frozen reference policy

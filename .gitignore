@@ -1,0 +1,115 @@
+# ==============================
+# Private / Local-only directories
+# ==============================
+paper/
+docs/
+
+# ==============================
+# Data & Outputs (NEVER commit)
+# ==============================
+data/
+outputs/
+wandb/
+logs/
+
+# ==============================
+# Model Checkpoints
+# ==============================
+*.ckpt
+*.pt
+*.pth
+*.safetensors
+checkpoints/
+
+# ==============================
+# Python
+# ==============================
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+*.eggs/
+build/
+dist/
+.eggs/
+*.so
+*.egg
+
+# ==============================
+# Virtual Environments
+# ==============================
+.venv/
+venv/
+env/
+ENV/
+
+# ==============================
+# IDE
+# ==============================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.settings/
+
+# ==============================
+# OS
+# ==============================
+.DS_Store
+Thumbs.db
+*.tmp
+
+# ==============================
+# Hydra
+# ==============================
+.hydra/
+multirun/
+
+# ==============================
+# Jupyter
+# ==============================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ==============================
+# LaTeX build artifacts
+# ==============================
+paper/*.aux
+paper/*.log
+paper/*.bbl
+paper/*.blg
+paper/*.out
+paper/*.synctex.gz
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.toc
+paper/*.lof
+paper/*.lot
+paper/*.nav
+paper/*.snm
+paper/*.vrb
+paper/*.pdf
+!paper/figures/*.pdf
+
+# ==============================
+# Large media (commit only teaser)
+# ==============================
+*.mp4
+*.avi
+*.mov
+*.mkv
+!media/teaser.png
+!media/*.gif
+
+# ==============================
+# Misc
+# ==============================
+*.bak
+*.orig
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/

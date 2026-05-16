@@ -1,0 +1,102 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "opab"
+version = "0.1.0"
+description = "One Policy, Any Body: Zero-Shot Cross-Embodiment Transfer via Morphology-Conditioned Diffusion"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "TODO", email = "TODO@email.com"},
+]
+keywords = [
+    "robotics",
+    "diffusion-policy",
+    "cross-embodiment",
+    "reinforcement-learning",
+    "manipulation",
+    "DPO",
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+dependencies = [
+    # Core ML
+    "torch>=2.1.0",
+    "torchvision>=0.16.0",
+    "einops>=0.7.0",
+    "diffusers>=0.25.0",
+
+    # Simulation
+    "mujoco>=3.1.0",
+    "mujoco-python-viewer>=0.1.0",
+
+    # Robot Learning
+    "lerobot>=0.1.0",
+    "gymnasium>=0.29.0",
+
+    # Configs
+    "hydra-core>=1.3.0",
+    "omegaconf>=2.3.0",
+
+    # Vision / Language
+    "transformers>=4.36.0",
+    "open-clip-torch>=2.24.0",
+
+    # Experiment Tracking
+    "wandb>=0.16.0",
+
+    # Data / IO
+    "h5py>=3.10.0",
+    "zarr>=2.16.0",
+    "imageio[ffmpeg]>=2.33.0",
+
+    # Utilities
+    "numpy>=1.24.0,<2.0",
+    "scipy>=1.11.0",
+    "matplotlib>=3.8.0",
+    "tqdm>=4.66.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-timeout>=2.2.0",
+    "ruff>=0.3.0",
+    "pre-commit>=3.6.0",
+    "ipython>=8.0.0",
+    "jupyterlab>=4.0.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/TODO/one_policy_any_body"
+Paper = "https://arxiv.org/abs/TODO"
+Issues = "https://github.com/TODO/one_policy_any_body/issues"
+
+[tool.setuptools.packages.find]
+include = ["opab*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "W", "UP"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["opab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+timeout = 120
+addopts = "-v --tb=short"

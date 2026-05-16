@@ -1,0 +1,43 @@
+# @package _global_
+
+defaults:
+  - task: franka_pick
+  - policy: morphology_dp
+  - robot: franka
+  - _self_
+
+# ---- Training ----
+training:
+  seed: 42
+  num_epochs: 500
+  batch_size: 64
+  lr: 1.0e-4
+  weight_decay: 1.0e-6
+  lr_scheduler: cosine
+  lr_warmup_steps: 500
+  ema_decay: 0.995
+  gradient_clip_norm: 1.0
+  checkpoint_every: 50
+  eval_every: 50
+  log_every: 10
+  num_eval_episodes: 20
+  device: cuda
+
+# ---- Logging ----
+logging:
+  project: opab
+  group: null
+  mode: online  # online | offline | disabled
+  tags: []
+
+# ---- Paths ----
+output_dir: data/outputs/${now:%Y.%m.%d}/${now:%H.%M.%S}_${policy.name}_${task.name}
+checkpoint_dir: ${output_dir}/checkpoints
+media_dir: ${output_dir}/media
+
+hydra:
+  run:
+    dir: ${output_dir}
+  sweep:
+    dir: data/outputs/${now:%Y.%m.%d}/multirun
+    subdir: ${hydra.job.num}_${policy.name}_${task.name}

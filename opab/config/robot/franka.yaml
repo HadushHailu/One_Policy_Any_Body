@@ -1,0 +1,23 @@
+# Franka Panda — 7-DoF industrial manipulator
+name: franka
+urdf: assets/robots/franka/franka_panda.xml
+n_joints: 7
+gripper_type: parallel_jaw
+
+# DH parameters: [a, d, alpha, theta_offset] per joint
+dh_params:
+  - [0.0,    0.333,  0.0,       0.0]    # joint 1
+  - [0.0,    0.0,   -1.5708,    0.0]    # joint 2
+  - [0.0,    0.316,  1.5708,    0.0]    # joint 3
+  - [0.0825, 0.0,    1.5708,    0.0]    # joint 4
+  - [-0.0825, 0.384, -1.5708,   0.0]    # joint 5
+  - [0.0,    0.0,    1.5708,    0.0]    # joint 6
+  - [0.088,  0.0,    1.5708,    0.0]    # joint 7
+
+joint_limits:
+  lower: [-2.8973, -1.7628, -2.8973, -3.0718, -2.8973, -0.0175, -2.8973]
+  upper: [ 2.8973,  1.7628,  2.8973, -0.0698,  2.8973,  3.7525,  2.8973]
+
+workspace_radius: 0.855  # meters
+payload_kg: 3.0
+gripper_max_width: 0.08  # meters
