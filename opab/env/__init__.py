@@ -18,7 +18,6 @@ def make_env(
     max_episode_steps: int = 300,
     seed: int | None = None,
     domain_randomization: bool = False,
-    kinematic_mode: bool = True,
 ) -> PickPlaceEnv:
     """
     Factory function — creates a PickPlaceEnv for the specified robot.
@@ -30,8 +29,6 @@ def make_env(
         max_episode_steps: Episode length limit
         seed: RNG seed for reproducibility
         domain_randomization: Enable DR (default off for Week 1)
-        kinematic_mode: If True, set arm joints directly (instant IK tracking).
-                        If False, use position actuators (realistic but slower).
 
     Returns:
         PickPlaceEnv instance ready for reset()/step()
@@ -47,7 +44,6 @@ def make_env(
         control_freq=control_freq,
         max_episode_steps=max_episode_steps,
         seed=seed,
-        kinematic_mode=kinematic_mode,
     )
 
     # Attach domain randomizer (inactive unless enabled)

@@ -38,13 +38,14 @@ class RobotConfig:
         if name == "franka":
             self.scene_path = kwargs.get("scene_path",
                 "assets/mujoco_menagerie/franka_emika_panda/scene.xml")
-            self.ee_body_name = "hand"      # use body (no sites in menagerie Franka)
+            self.ee_body_name = "hand"
+            self.ee_site_name = "grip_site"  # injected at fingertip center
             self.n_arm_joints = 7
             self.n_gripper_joints = 2
             self.arm_joint_names = [f"joint{i}" for i in range(1, 8)]
             self.gripper_joint_names = ["finger_joint1", "finger_joint2"]
-            self.gripper_actuator_idx = None  # No gripper actuator in menagerie
-            self.n_arm_actuators = 7          # ctrl[0..6] = arm position, ctrl[7] = arm velocity
+            self.gripper_actuator_idx = [8, 9]  # injected finger actuators
+            self.n_arm_actuators = 8          # ctrl[0..6] = arm position, ctrl[7] = arm velocity
             self.action_scale = 0.02        # max EE delta per step (m)
             self.ik_damping = 0.01
             self.ik_max_iter = 50
@@ -61,7 +62,7 @@ class RobotConfig:
             self.table_half_size = np.array([0.25, 0.3, 0.2])
             self.cube_pos = np.array([0.5, 0.05, 0.42])
             self.cube_size = 0.015
-            self.cube_mass = 0.05
+            self.cube_mass = 0.1
             self.target_pos = np.array([0.5, -0.15, 0.405])
             self.cam_pos = np.array([0.5, 0.0, 1.3])
             self.cube_randomize_range = 0.05
@@ -69,38 +70,38 @@ class RobotConfig:
 
         elif name == "ur5":
             self.scene_path = kwargs.get("scene_path",
-                "assets/mujoco_menagerie/universal_robots_ur5e/scene.xml")
-            self.ee_body_name = "wrist_3_link"
-            self.ee_site_name = "attachment_site"
+                "assets/mujoco_menagerie/universal_robots_ur5e/scene_gripper.xml")
+            self.ee_body_name = "gripper_base"
+            self.ee_site_name = "pinch"
             self.n_arm_joints = 6
-            self.n_gripper_joints = 0  # no gripper in menagerie UR5e
+            self.n_gripper_joints = 8  # Robotiq 2F85 linkage joints
             self.arm_joint_names = [
                 "shoulder_pan_joint", "shoulder_lift_joint", "elbow_joint",
                 "wrist_1_joint", "wrist_2_joint", "wrist_3_joint"
             ]
-            self.gripper_joint_names = []
-            self.gripper_actuator_idx = None
+            self.gripper_joint_names = ["right_driver_joint"]
+            self.gripper_actuator_idx = 6  # fingers_actuator
             self.action_scale = 0.02
             self.ik_damping = 0.01
             self.ik_max_iter = 50
-            self.gripper_open = 0.04
-            self.gripper_closed = 0.0
-            # UR5e "ready" pose: arm reaches forward and down
+            self.gripper_open = 0.0     # ctrl=0 → open
+            self.gripper_closed = 255.0  # ctrl=255 → closed
+            # UR5e "ready" pose: arm points toward +X (table direction)
             self.home_qpos = {
-                "shoulder_pan_joint": -1.571,
+                "shoulder_pan_joint": -3.14,
                 "shoulder_lift_joint": -1.571,
                 "elbow_joint": 1.571,
                 "wrist_1_joint": -1.571,
                 "wrist_2_joint": -1.571,
                 "wrist_3_joint": 0.0,
             }
-            self.table_pos = np.array([0.4, -0.3, 0.2])
-            self.table_half_size = np.array([0.25, 0.3, 0.2])
-            self.cube_pos = np.array([0.4, -0.25, 0.42])
+            self.table_pos = np.array([0.45, 0.0, 0.2])
+            self.table_half_size = np.array([0.2, 0.2, 0.2])
+            self.cube_pos = np.array([0.45, 0.05, 0.42])
             self.cube_size = 0.015
             self.cube_mass = 0.05
-            self.target_pos = np.array([0.4, -0.45, 0.405])
-            self.cam_pos = np.array([0.4, -0.3, 1.3])
+            self.target_pos = np.array([0.45, -0.1, 0.405])
+            self.cam_pos = np.array([0.45, 0.0, 1.3])
             self.cube_randomize_range = 0.05
             self.success_threshold = 0.03
 
@@ -120,24 +121,28 @@ class RobotConfig:
             self.action_scale = 0.02
             self.ik_damping = 0.05
             self.ik_max_iter = 30
-            self.gripper_open = -0.17     # hinge joint: open angle
-            self.gripper_closed = 1.5     # hinge joint: closed angle
-            # SO-101 "above table" pose
+            self.gripper_open = 1.5       # hinge joint: open angle (positive)
+            self.gripper_closed = -0.17   # hinge joint: closed angle (negative)
+            # Top-down grasp pose (inspired by Isaac Lab SO-101 config).
+            # wrist_flex=π/2 tilts the gripper 90° downward so fingers
+            # open horizontally — perfect for top-down pick-and-place.
+            # wrist_roll stays at 0 (no rotation needed).
             self.home_qpos = {
-                "shoulder_pan": 0.0, "shoulder_lift": 0.3,
-                "elbow_flex": -0.3, "wrist_flex": 0.5,
-                "wrist_roll": 0.0, "gripper": -0.17,
+                "shoulder_pan": 0.0, "shoulder_lift": 0.0,
+                "elbow_flex": 0.0, "wrist_flex": 1.5708,
+                "wrist_roll": 0.0, "gripper": 1.5,
             }
-            # Robot at origin on floor. Workspace forward at x≈0.35-0.50,
-            # z range 0.03-0.25. Table at floor level, cube on table.
-            self.table_pos = np.array([0.35, 0.0, 0.025])
-            self.table_half_size = np.array([0.15, 0.15, 0.025])
-            self.cube_pos = np.array([0.38, 0.05, 0.065])
+            # Robot at origin on floor. With this pose, EE is at
+            # ~[0.244, 0, 0.075] pointing straight down.
+            # Place cube on ground level close to the robot.
+            self.table_pos = np.array([0.20, 0.0, 0.0])
+            self.table_half_size = np.array([0.10, 0.10, 0.001])
+            self.cube_pos = np.array([0.20, 0.0, 0.016])
             self.cube_size = 0.015
             self.cube_mass = 0.03
-            self.target_pos = np.array([0.38, -0.08, 0.055])
-            self.cam_pos = np.array([0.35, 0.0, 0.65])
-            self.cube_randomize_range = 0.04
+            self.target_pos = np.array([0.20, -0.08, 0.016])
+            self.cam_pos = np.array([0.20, 0.0, 0.55])
+            self.cube_randomize_range = 0.02
             self.success_threshold = 0.03
         else:
             raise ValueError(f"Unknown robot: {name}")
@@ -165,7 +170,7 @@ class PickPlaceEnv:
         control_freq: float = 20.0,
         max_episode_steps: int = 300,
         seed: Optional[int] = None,
-        kinematic_mode: bool = True,
+        kinematic_mode: bool = False,
     ):
         self.robot_name = robot
         self.cfg = RobotConfig(robot)
@@ -193,6 +198,7 @@ class PickPlaceEnv:
 
     def _load_model(self):
         """Load the MuJoCo model for this robot with task objects injected."""
+        import re
         project_root = Path(__file__).resolve().parents[2]
 
         # All robots use the same approach: load menagerie scene.xml,
@@ -203,6 +209,45 @@ class PickPlaceEnv:
         # Read the original scene XML
         with open(scene_path) as f:
             xml = f.read()
+
+        # Inline <include file="..."/> so we can inject into robot bodies
+        def _inline_includes(xml_str, base_dir):
+            pattern = r'<include\s+file="([^"]+)"\s*/>'
+            while re.search(pattern, xml_str):
+                def _replace_include(m):
+                    inc_path = base_dir / m.group(1)
+                    inc_text = inc_path.read_text()
+                    # Strip <?xml ...?> and outer <mujoco> tags from included file
+                    inc_text = re.sub(r'<\?xml[^>]*\?>', '', inc_text)
+                    inc_text = re.sub(r'<mujoco[^>]*>', '', inc_text, count=1)
+                    inc_text = re.sub(r'</mujoco\s*>', '', inc_text, count=1)
+                    return inc_text
+                xml_str = re.sub(pattern, _replace_include, xml_str, count=1)
+            return xml_str
+
+        xml = _inline_includes(xml, scene_dir)
+
+        # For Franka: inject a grip_site at the fingertip center
+        # (the "hand" body is the palm — 0.1034m above the actual grasp point)
+        if self.cfg.name == "franka":
+            xml = xml.replace(
+                '<body name="left_finger"',
+                '<site name="grip_site" pos="0 0 0.1034" size="0.005" '
+                'rgba="1 0 0 0.3" group="4" />\n'
+                '                      <body name="left_finger"'
+            )
+
+        # For Franka: inject finger actuators (menagerie has none)
+        if self.cfg.name == "franka":
+            # Add position actuators for finger joints before </actuator>
+            # kp=200 gives gentle but firm grip (1000 launches the cube)
+            finger_actuators = (
+                '\n  <position name="finger_actuator1" joint="finger_joint1" '
+                'kp="400" ctrlrange="0 0.04" />'
+                '\n  <position name="finger_actuator2" joint="finger_joint2" '
+                'kp="400" ctrlrange="0 0.04" />'
+            )
+            xml = xml.replace('</actuator>', finger_actuators + '\n</actuator>')
 
         # Build objects XML to inject
         cfg = self.cfg
@@ -219,17 +264,19 @@ class PickPlaceEnv:
       <freejoint name="cube_joint" />
       <geom name="cube_geom" type="box" size="{cfg.cube_size} {cfg.cube_size} {cfg.cube_size}"
             mass="{cfg.cube_mass}" rgba="0.9 0.1 0.1 1" condim="4"
-            friction="1.0 0.005 0.001" contype="1" conaffinity="1" />
+            friction="1.5 0.005 0.001" contype="1" conaffinity="1"
+            solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" />
     </body>
 
     <site name="target_zone" pos="{cfg.target_pos[0]} {cfg.target_pos[1]} {cfg.target_pos[2]}"
           size="0.04 0.04 0.002" rgba="0.1 0.8 0.1 0.4" type="box" />
 
     <camera name="overhead_cam" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
-            xyaxes="1 0 0 0 -1 0" fovy="50" />
+            xyaxes="1 0 0 0 1 0" fovy="50" />
 """
-        # Inject before </worldbody>
-        xml = xml.replace("</worldbody>", objects + "  </worldbody>")
+        # Inject before the LAST </worldbody> (after inlining there may be multiple)
+        idx = xml.rfind("</worldbody>")
+        xml = xml[:idx] + objects + "  </worldbody>" + xml[idx + len("</worldbody>"):]
 
         # Write temp file in same directory so includes/meshes resolve
         tmp_path = scene_dir / "_opab_tmp_scene.xml"
@@ -240,6 +287,17 @@ class PickPlaceEnv:
             tmp_path.unlink(missing_ok=True)
 
         self.data = mujoco.MjData(self.model)
+
+        # --- Post-load actuator tuning for sim ---
+        # SO-101 menagerie default forcerange (±2.94 Nm) is too low for
+        # position-tracking with kp=998 → saturates at ~0.003 rad error.
+        # Raise force limits for ARM actuators so joints can track IK,
+        # but keep the gripper force moderate to avoid flinging objects.
+        if self.robot_name == "so101":
+            for i in range(self.cfg.gripper_actuator_idx):  # arm only
+                self.model.actuator_forcerange[i] = [-50.0, 50.0]
+            # Moderate gripper force
+            self.model.actuator_forcerange[self.cfg.gripper_actuator_idx] = [-5.0, 5.0]
 
     def _cache_ids(self):
         """Cache body/joint/site IDs for fast access."""
@@ -345,7 +403,12 @@ class PickPlaceEnv:
         saved_qpos = self.data.qpos.copy()
         saved_qvel = self.data.qvel.copy()
 
-        qpos = np.array([self.data.qpos[i] for i in self._arm_qpos_ids])
+        # Seed from previous IK solution (ctrl) rather than actual qpos to
+        # avoid re-seeding from a lagging configuration in dynamic mode.
+        if hasattr(self, '_last_ik_qpos') and self._last_ik_qpos is not None:
+            qpos = self._last_ik_qpos.copy()
+        else:
+            qpos = np.array([self.data.qpos[i] for i in self._arm_qpos_ids])
         base_damping = self.cfg.ik_damping
 
         for it in range(self.cfg.ik_max_iter):
@@ -399,6 +462,7 @@ class PickPlaceEnv:
         self.data.qvel[:] = saved_qvel
         mujoco.mj_forward(self.model, self.data)
 
+        self._last_ik_qpos = qpos.copy()
         return qpos
 
     # ============================================================
@@ -412,14 +476,11 @@ class PickPlaceEnv:
         cmd = 1.0 → fully closed
         """
         if self.robot_name == "franka":
-            # Franka: no gripper actuator in menagerie — set finger qpos directly
+            # Franka: use injected finger actuators
             grip_pos = self.cfg.gripper_open * (1.0 - cmd)
-            for gname in self.cfg.gripper_joint_names:
-                jid = mujoco.mj_name2id(
-                    self.model, mujoco.mjtObj.mjOBJ_JOINT, gname
-                )
-                if jid >= 0:
-                    self.data.qpos[self.model.jnt_qposadr[jid]] = grip_pos
+            for idx in self.cfg.gripper_actuator_idx:
+                if idx < self.model.nu:
+                    self.data.ctrl[idx] = grip_pos
 
         elif self.robot_name == "so101":
             # SO-101: hinge gripper (open=negative angle, closed=positive)
@@ -429,8 +490,11 @@ class PickPlaceEnv:
             self.data.ctrl[self.cfg.gripper_actuator_idx] = grip_pos
 
         elif self.robot_name == "ur5":
-            # UR5 has no gripper in the menagerie model
-            pass
+            # Robotiq 2F85: ctrl 0=open, 255=closed
+            grip_val = self.cfg.gripper_open + cmd * (
+                self.cfg.gripper_closed - self.cfg.gripper_open
+            )
+            self.data.ctrl[self.cfg.gripper_actuator_idx] = grip_val
 
     def _get_gripper_pos(self) -> float:
         """Get normalized gripper position [0=open, 1=closed]."""
@@ -447,7 +511,36 @@ class PickPlaceEnv:
             if abs(span) > 1e-6:
                 return (raw - self.cfg.gripper_open) / span
             return 0.0
+        elif self.robot_name == "ur5":
+            # Robotiq 2F85: right_driver_joint range [0, 0.8]
+            # 0 = open, 0.8 = closed
+            jid = mujoco.mj_name2id(
+                self.model, mujoco.mjtObj.mjOBJ_JOINT, "right_driver_joint"
+            )
+            raw = self.data.qpos[self.model.jnt_qposadr[jid]]
+            return raw / 0.8  # normalize to [0, 1]
         return 0.0
+
+    def _count_finger_cube_contacts(self) -> int:
+        """Count contacts between finger geoms and the cube."""
+        if self._cube_body_id < 0:
+            return 0
+        count = 0
+        cube_geom_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_GEOM, "cube_geom"
+        )
+        for c in range(self.data.ncon):
+            g1 = self.data.contact[c].geom1
+            g2 = self.data.contact[c].geom2
+            # One geom must be cube, the other must not be table
+            if g1 == cube_geom_id or g2 == cube_geom_id:
+                other = g2 if g1 == cube_geom_id else g1
+                other_name = mujoco.mj_id2name(
+                    self.model, mujoco.mjtObj.mjOBJ_GEOM, other
+                ) or ""
+                if "table" not in other_name and "floor" not in other_name:
+                    count += 1
+        return count
 
     # ============================================================
     # Environment Interface
@@ -486,6 +579,8 @@ class PickPlaceEnv:
 
         mujoco.mj_forward(self.model, self.data)
         self._step_count = 0
+        self._ee_target = self._get_ee_pos().copy()  # track desired EE position
+        self._last_ik_qpos = None  # IK will seed from current qpos on first call
         return self._get_obs()
 
     def step(self, action: np.ndarray) -> tuple[dict, float, bool, bool, dict]:
@@ -510,40 +605,50 @@ class PickPlaceEnv:
         ee_delta = np.clip(action[:3], -self.cfg.action_scale, self.cfg.action_scale)
         grip_cmd = np.clip(action[3], 0.0, 1.0)
 
-        # Compute target EE position
-        current_ee_pos = self._get_ee_pos()
-        target_ee_pos = current_ee_pos + ee_delta
+        # Accumulate desired EE position (not relative to current, which lags)
+        self._ee_target = self._ee_target + ee_delta
 
-        # IK → joint positions
-        target_qpos = self._ik_solve(target_ee_pos)
+        # Prevent target from drifting too far from actual EE
+        # (if IK can't reach the target, it accumulates indefinitely)
+        actual_ee = self._get_ee_pos()
+        drift = self._ee_target - actual_ee
+        # SO-101 needs more drift room — arm tracks slowly with rate-limited joints
+        max_drift = 0.15 if self.robot_name == "so101" else 0.05
+        drift_norm = np.linalg.norm(drift)
+        if drift_norm > max_drift:
+            self._ee_target = actual_ee + drift * (max_drift / drift_norm)
 
-        if self.kinematic_mode:
-            # Kinematic mode: pin arm joints to IK solution each substep.
-            # Physics runs normally for objects/gripper, but arm joints
-            # are overwritten after each substep so actuator forces can't
-            # drift them.  This is the standard approach for scripted
-            # demo collection in manipulation research.
-            for i in range(min(self.cfg.n_arm_joints, self.model.nu)):
-                self.data.ctrl[i] = target_qpos[i]
-            # Zero velocity actuators (e.g. Franka ctrl[7])
-            n_ctrl = getattr(self.cfg, 'n_arm_actuators', self.cfg.n_arm_joints)
-            for i in range(self.cfg.n_arm_joints, n_ctrl):
-                self.data.ctrl[i] = 0.0
-        else:
-            # Dynamic mode: use position actuators (realistic but slow)
-            for i in range(self.cfg.n_arm_joints):
-                self.data.ctrl[i] = target_qpos[i]
+        # IK → joint positions from desired target
+        target_qpos = self._ik_solve(self._ee_target)
+
+        # Joint-space rate limiting for SO-101:
+        # With kp=998 and forcerange ±50 Nm the max non-saturating
+        # joint delta is 50/998 ≈ 0.05 rad.  Clamp ctrl changes to
+        # stay below that so actuators track smoothly.
+        if self.robot_name == "so101":
+            actual_arm_qpos = np.array(
+                [self.data.qpos[i] for i in self._arm_qpos_ids]
+            )
+            max_joint_delta = 0.04  # rad per control step
+            delta = target_qpos - actual_arm_qpos
+            delta = np.clip(delta, -max_joint_delta, max_joint_delta)
+            target_qpos = actual_arm_qpos + delta
+            # Re-seed IK from rate-limited target (avoids divergence)
+            self._last_ik_qpos = target_qpos.copy()
+
+        # Set arm actuator targets
+        for i in range(min(self.cfg.n_arm_joints, self.model.nu)):
+            self.data.ctrl[i] = target_qpos[i]
+        # Zero velocity actuators (e.g. Franka ctrl[7])
+        n_ctrl = getattr(self.cfg, 'n_arm_actuators', self.cfg.n_arm_joints)
+        for i in range(self.cfg.n_arm_joints, n_ctrl):
+            self.data.ctrl[i] = 0.0
 
         # Apply gripper
         self._set_gripper(grip_cmd)
 
         # Step physics
         for _ in range(self.n_substeps):
-            if self.kinematic_mode:
-                # Pin arm joints before each substep
-                for i, qpos_idx in enumerate(self._arm_qpos_ids):
-                    self.data.qpos[qpos_idx] = target_qpos[i]
-                    self.data.qvel[self._arm_dof_ids[i]] = 0.0
             mujoco.mj_step(self.model, self.data)
 
         self._step_count += 1
@@ -551,7 +656,9 @@ class PickPlaceEnv:
         obs = self._get_obs()
         success = self._check_success()
         reward = float(success)
-        terminated = success
+        # Don't terminate on success immediately — let the policy complete
+        # the full place+release+retreat cycle for realistic behavior.
+        terminated = False
         truncated = self._step_count >= self.max_episode_steps
 
         info = {"success": success, "step": self._step_count}
@@ -596,8 +703,8 @@ class PickPlaceEnv:
 
         # XY distance
         dist_xy = np.linalg.norm(cube_pos[:2] - target_pos[:2])
-        # Height check: cube above table level
-        height_ok = cube_pos[2] > target_pos[2] - 0.02
+        # Height check: cube must be near target height (placed, not mid-air)
+        height_ok = abs(cube_pos[2] - target_pos[2]) < 0.03
 
         return dist_xy < self.cfg.success_threshold and height_ok
 

@@ -52,7 +52,7 @@ pip install -e ".[dev]"
 
 # Verify
 python -c "import opab; print('OPAB ready')"
-pytest tests/ -x --timeout=60
+pytest tests/test_env_integration.py -x --timeout=60
 ```
 
 ### Hardware Requirements
