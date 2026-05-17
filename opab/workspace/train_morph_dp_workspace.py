@@ -154,6 +154,89 @@ class TrainMorphDPWorkspace:
         )
 
     # ==================================================================
-    def eval(self) -> None:
-        """Evaluate a checkpoint in simulation (Week 3)."""
-        raise NotImplementedError("Week 3 deliverable: sim evaluation loop")
+    def eval(self, policy=None, normalizer=None) -> float:
+        """
+        Run policy rollouts in sim, return success rate.
+
+        Can be called standalone or during training for periodic eval.
+        """
+        from collections import deque
+
+        import numpy as np
+
+        from opab.env import make_env
+        from opab.model.morphology_encoder import MorphologyEncoder
+
+        cfg = self.cfg
+        n_episodes = cfg.training.get("num_eval_episodes", 10)
+        robot_name = cfg.robot.name
+
+        if policy is None or normalizer is None:
+            raise ValueError("Must pass policy and normalizer for eval")
+
+        morph_vec = MorphologyEncoder.from_robot_config(cfg.robot)
+        env = make_env(robot_name, seed=99)
+
+        obs_horizon = cfg.policy.action.obs_horizon
+        execute_horizon = cfg.policy.action.execute_horizon
+        max_proprio_dim = cfg.policy.proprio_encoder.input_dim
+
+        policy.eval()
+        successes = []
+        motions = []
+
+        for ep in range(n_episodes):
+            obs = env.reset()
+            obs_buffer = deque(maxlen=obs_horizon)
+            for _ in range(obs_horizon):
+                obs_buffer.append(obs)
+
+            action_queue = []
+            trajectory = []
+            steps = 0
+
+            while steps < env.max_episode_steps:
+                if len(action_queue) == 0:
+                    images, proprios = [], []
+                    for o in obs_buffer:
+                        img = o["image"].astype(np.float32) / 255.0
+                        img = np.transpose(img, (2, 0, 1))
+                        images.append(img)
+                        p = o["proprioception"].astype(np.float32)
+                        if len(p) < max_proprio_dim:
+                            p = np.pad(p, (0, max_proprio_dim - len(p)))
+                        proprios.append(p[:max_proprio_dim])
+
+                    import torch as th
+
+                    obs_img = th.from_numpy(np.stack(images)).unsqueeze(0).to(self.device)
+                    obs_prop = th.from_numpy(np.stack(proprios)).unsqueeze(0).to(self.device)
+                    obs_prop = normalizer.normalize("proprioception", obs_prop)
+                    morph_batch = morph_vec.unsqueeze(0).to(self.device)
+
+                    with th.no_grad():
+                        chunk = policy.predict_action(obs_img, obs_prop, morph_batch)
+                    chunk = normalizer.unnormalize("actions", chunk[0])
+                    action_queue = list(chunk.cpu().numpy())
+
+                action = action_queue.pop(0)
+                obs, _, terminated, truncated, info = env.step(action)
+                obs_buffer.append(obs)
+                trajectory.append(obs["ee_pos"].copy())
+                steps += 1
+                if terminated or truncated:
+                    break
+
+            traj = np.array(trajectory)
+            motion = np.sum(np.linalg.norm(np.diff(traj, axis=0), axis=1)) if len(traj) > 1 else 0.0
+            successes.append(info.get("success", False))
+            motions.append(motion)
+
+        env.close()
+        success_rate = sum(successes) / max(len(successes), 1)
+        avg_motion = np.mean(motions)
+        logger.info(
+            f"  Eval: {sum(successes)}/{n_episodes} success, "
+            f"avg_motion={avg_motion:.4f}m"
+        )
+        return success_rate
