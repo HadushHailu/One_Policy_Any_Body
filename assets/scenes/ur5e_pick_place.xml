@@ -1,0 +1,81 @@
+<mujoco model="ur5e_pick_place">
+  <!--
+    UR5e pick-and-place scene.
+    Robot: 6-DoF Universal Robots UR5e (from MuJoCo Menagerie)
+    Task: Pick a cube from random position, place in target zone.
+    Note: UR5e has no built-in gripper — we add a simple parallel jaw.
+  -->
+  <include file="../mujoco_menagerie/universal_robots_ur5e/ur5e.xml" />
+
+  <statistic center="0.3 0 0.4" extent="0.8" />
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast" />
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1" />
+  </visual>
+
+  <worldbody>
+    <!-- Floor -->
+    <geom name="floor" type="plane" size="2 2 0.01" rgba="0.2 0.2 0.2 1"
+          contype="1" conaffinity="1" />
+    <light pos="0 0 3" dir="0 0 -1" diffuse="0.8 0.8 0.8" />
+
+    <!-- Table (positioned within UR5 workspace) -->
+    <body name="table" pos="0.4 -0.3 0.2">
+      <geom name="table_surface" type="box" size="0.3 0.4 0.2"
+            rgba="0.55 0.4 0.25 1" contype="1" conaffinity="1"
+            friction="0.8 0.005 0.001" />
+    </body>
+
+    <!-- Cube to pick -->
+    <body name="cube" pos="0.4 -0.25 0.425">
+      <freejoint name="cube_joint" />
+      <geom name="cube_geom" type="box" size="0.015 0.015 0.015"
+            mass="0.05" rgba="0.9 0.1 0.1 1" condim="4"
+            friction="1.0 0.005 0.001" contype="1" conaffinity="1" />
+    </body>
+
+    <!-- Target zone -->
+    <site name="target_zone" pos="0.4 -0.45 0.405" size="0.04 0.04 0.002"
+          rgba="0.1 0.8 0.1 0.4" type="box" />
+
+    <!-- Overhead camera -->
+    <camera name="overhead" pos="0.4 -0.3 1.3" xyaxes="1 0 0 0 -1 0" fovy="50" />
+
+    <!-- Front camera -->
+    <camera name="front" pos="1.0 -0.3 0.7" xyaxes="0 1 0 -0.3 0 1" fovy="50" />
+
+    <!-- Simple parallel-jaw gripper attached to UR5e wrist -->
+    <!-- Welded to attachment_site via equality constraint -->
+    <body name="gripper_base" pos="0 0 0">
+      <body name="ur5_finger_left" pos="0 0.01 0">
+        <joint name="ur5_finger_left_joint" type="slide" axis="0 1 0"
+               range="0 0.04" damping="5" />
+        <geom type="box" size="0.008 0.004 0.03" pos="0 0 0.03"
+              rgba="0.5 0.5 0.5 1" friction="1.2 0.005 0.001"
+              condim="4" contype="1" conaffinity="1" mass="0.03" />
+      </body>
+      <body name="ur5_finger_right" pos="0 -0.01 0">
+        <joint name="ur5_finger_right_joint" type="slide" axis="0 -1 0"
+               range="0 0.04" damping="5" />
+        <geom type="box" size="0.008 0.004 0.03" pos="0 0 0.03"
+              rgba="0.5 0.5 0.5 1" friction="1.2 0.005 0.001"
+              condim="4" contype="1" conaffinity="1" mass="0.03" />
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- Add gripper actuators (arm actuators come from ur5e.xml) -->
+  <actuator>
+    <position name="ur5_finger_left_pos" joint="ur5_finger_left_joint"
+              kp="30" kv="3" ctrlrange="0 0.04" />
+    <position name="ur5_finger_right_pos" joint="ur5_finger_right_joint"
+              kp="30" kv="3" ctrlrange="0 0.04" />
+  </actuator>
+
+  <!-- Weld gripper to UR5e wrist + couple fingers -->
+  <equality>
+    <weld body1="gripper_base" body2="wrist_3_link" relpose="0 0 0.1 1 0 0 0" />
+    <joint joint1="ur5_finger_left_joint" joint2="ur5_finger_right_joint"
+           polycoef="0 1 0 0 0" />
+  </equality>
+</mujoco>

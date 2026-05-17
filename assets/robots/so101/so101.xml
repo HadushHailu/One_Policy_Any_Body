@@ -1,0 +1,134 @@
+<mujoco model="so101">
+  <!--
+    SO-101: 6-DoF low-cost robot arm ($300)
+    Modeled from DH parameters (opab/config/robot/so101.yaml)
+    Joint limits: STS3215 servos (~±150°)
+    Workspace radius: ~0.30m
+  -->
+  <compiler angle="radian" autolimits="true" />
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast" />
+
+  <default>
+    <default class="so101">
+      <joint damping="0.5" armature="0.01" frictionloss="0.1" />
+      <geom type="capsule" rgba="0.3 0.3 0.7 1" condim="4"
+            friction="0.8 0.005 0.001" />
+      <position kp="500" kv="50" ctrlrange="-2.618 2.618" />
+    </default>
+    <default class="so101_finger">
+      <joint damping="5" armature="0.005" />
+      <geom type="box" rgba="0.5 0.5 0.5 1" condim="4"
+            friction="1.2 0.005 0.001" contype="1" conaffinity="1" />
+      <position kp="200" kv="20" ctrlrange="0 0.02" />
+    </default>
+  </default>
+
+  <worldbody>
+    <!-- Base mount (fixed to table) -->
+    <body name="base_link" pos="0 0 0">
+      <geom type="cylinder" size="0.04 0.015" rgba="0.2 0.2 0.2 1" mass="0.5" />
+      <site name="base_site" pos="0 0 0" size="0.005" rgba="1 0 0 0.5" />
+
+      <!-- Joint 1: Base rotation — axis Z, d=0.045 -->
+      <body name="link1" pos="0 0 0.03">
+        <joint name="joint1" type="hinge" axis="0 0 1"
+               range="-2.618 2.618" class="so101" />
+        <geom type="capsule" fromto="0 0 0 0 0 0.045" size="0.025" mass="0.15"
+              rgba="0.3 0.3 0.7 1" />
+
+        <!-- Joint 2: Shoulder — axis Y, a=-0.104 -->
+        <body name="link2" pos="0 0 0.045">
+          <joint name="joint2" type="hinge" axis="0 1 0"
+                 range="-1.571 1.571" class="so101" />
+          <geom type="capsule" fromto="0 0 0 0.104 0 0" size="0.02" mass="0.12"
+                rgba="0.3 0.7 0.3 1" />
+
+          <!-- Joint 3: Elbow — axis Y, a=-0.096 -->
+          <body name="link3" pos="0.104 0 0">
+            <joint name="joint3" type="hinge" axis="0 1 0"
+                   range="-2.618 2.618" class="so101" />
+            <geom type="capsule" fromto="0 0 0 0.096 0 0" size="0.018" mass="0.10"
+                  rgba="0.7 0.3 0.3 1" />
+
+            <!-- Joint 4: Wrist pitch — axis Z, alpha=pi/2 -->
+            <body name="link4" pos="0.096 0 0">
+              <joint name="joint4" type="hinge" axis="0 0 1"
+                     range="-2.618 2.618" class="so101" />
+              <geom type="capsule" fromto="0 0 0 0 0 0.015" size="0.015" mass="0.08"
+                    rgba="0.7 0.7 0.3 1" />
+
+              <!-- Joint 5: Wrist roll — axis Y, d=0.044 -->
+              <body name="link5" pos="0 0 0.044">
+                <joint name="joint5" type="hinge" axis="0 1 0"
+                       range="-2.618 2.618" class="so101" />
+                <geom type="capsule" fromto="0 0 0 0 0 0.015" size="0.012" mass="0.06"
+                      rgba="0.3 0.7 0.7 1" />
+
+                <!-- Joint 6: Wrist rotation — axis Z, d=0.036 -->
+                <body name="link6" pos="0 0 0.036">
+                  <joint name="joint6" type="hinge" axis="0 0 1"
+                         range="-2.618 2.618" class="so101" />
+                  <geom type="capsule" fromto="0 0 0 0 0 0.015" size="0.01" mass="0.04"
+                        rgba="0.7 0.3 0.7 1" />
+
+                  <!-- End-effector site -->
+                  <site name="ee_site" pos="0 0 0.015" size="0.008"
+                        rgba="1 1 0 1" type="sphere" />
+
+                  <!-- Gripper base -->
+                  <body name="gripper_base" pos="0 0 0.015">
+                    <!-- Left finger -->
+                    <body name="finger_left" pos="0 0.008 0">
+                      <joint name="finger_left_joint" type="slide"
+                             axis="0 1 0" range="0 0.02" class="so101_finger" />
+                      <geom size="0.005 0.003 0.025" pos="0 0 0.025"
+                            class="so101_finger" mass="0.02" />
+                      <site name="finger_left_site" pos="0 0 0.05"
+                            size="0.003" rgba="0 1 0 0.3" />
+                    </body>
+                    <!-- Right finger -->
+                    <body name="finger_right" pos="0 -0.008 0">
+                      <joint name="finger_right_joint" type="slide"
+                             axis="0 -1 0" range="0 0.02" class="so101_finger" />
+                      <geom size="0.005 0.003 0.025" pos="0 0 0.025"
+                            class="so101_finger" mass="0.02" />
+                      <site name="finger_right_site" pos="0 0 0.05"
+                            size="0.003" rgba="0 1 0 0.3" />
+                    </body>
+                  </body>
+
+                </body>
+              </body>
+            </body>
+          </body>
+        </body>
+      </body>
+    </body>
+  </worldbody>
+
+  <!-- Actuators: position control for all joints -->
+  <actuator>
+    <position name="j1_pos" joint="joint1" class="so101" />
+    <position name="j2_pos" joint="joint2" class="so101"
+              ctrlrange="-1.571 1.571" />
+    <position name="j3_pos" joint="joint3" class="so101" />
+    <position name="j4_pos" joint="joint4" class="so101" />
+    <position name="j5_pos" joint="joint5" class="so101" />
+    <position name="j6_pos" joint="joint6" class="so101" />
+    <position name="finger_left_pos" joint="finger_left_joint"
+              class="so101_finger" />
+    <position name="finger_right_pos" joint="finger_right_joint"
+              class="so101_finger" />
+  </actuator>
+
+  <!-- Couple the gripper fingers for symmetric motion -->
+  <equality>
+    <joint joint1="finger_left_joint" joint2="finger_right_joint"
+           polycoef="0 1 0 0 0" />
+  </equality>
+
+  <sensor>
+    <framepos name="ee_pos_sensor" objtype="site" objname="ee_site" />
+    <framequat name="ee_quat_sensor" objtype="site" objname="ee_site" />
+  </sensor>
+</mujoco>

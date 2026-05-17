@@ -1,74 +1,216 @@
 #!/usr/bin/env python3
-"""Generate simulated teleoperation demonstrations in MuJoCo.
+"""Generate simulated pick-and-place demonstrations with scripted policies.
+
+Collects expert demonstrations across multiple robot embodiments and saves
+them in HDF5 format compatible with downstream policy training.
 
 Usage:
-    python scripts/generate_sim_demos.py --robot so101 --task pick --n_demos 50 --out data/so101_pick
-    python scripts/generate_sim_demos.py --robot franka --task pick --n_demos 50 --out data/franka_pick
+    python scripts/generate_sim_demos.py --robot so101 --n_demos 50
+    python scripts/generate_sim_demos.py --robot franka --n_demos 50
+    python scripts/generate_sim_demos.py --robot ur5 --n_demos 50
+    python scripts/generate_sim_demos.py --all --n_demos 50
 """
 import argparse
+import time
 from pathlib import Path
 
+import h5py
+import numpy as np
 
-def make_env(robot: str, task: str):
-    """Create a MuJoCo environment for the given robot and task."""
-    # TODO: Build MuJoCo env from XML scene configs.
-    # Use opab/config/task/{robot}_{task}.yaml for scene parameters.
-    raise NotImplementedError(f"MuJoCo env for {robot}/{task} not yet built")
+# Make sure project root is importable
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from opab.env import make_env, ScriptedPickPlace, SUPPORTED_ROBOTS
 
 
-def scripted_policy(obs, robot: str):
-    """Simple scripted pick-and-place policy for demonstration generation.
-
-    Uses known object pose from sim state to compute IK waypoints.
+def collect_demos(
+    robot: str,
+    n_demos: int,
+    output_dir: Path,
+    seed: int = 0,
+    max_episode_steps: int = 300,
+    verbose: bool = True,
+):
     """
-    # TODO: Implement per-robot scripted policy
-    # 1. Move above object
-    # 2. Lower to grasp height
-    # 3. Close gripper
-    # 4. Lift
-    # 5. Move to target
-    # 6. Release
-    raise NotImplementedError
+    Collect demonstrations using the scripted pick-and-place policy.
 
+    Args:
+        robot: Robot name ('franka', 'ur5', 'so101')
+        n_demos: Number of episodes to collect
+        output_dir: Where to save HDF5 file
+        seed: Base random seed
+        max_episode_steps: Max steps per episode
+        verbose: Print progress
 
-def collect_demos(robot: str, task: str, n_demos: int, output_dir: Path):
-    """Collect n_demos demonstrations and save as HDF5."""
+    Returns:
+        Path to saved HDF5 file
+    """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    env = make_env(robot, task)
-    demos = []
+    env = make_env(robot=robot, seed=seed, max_episode_steps=max_episode_steps)
+    policy = ScriptedPickPlace(robot_name=robot)
 
-    for i in range(n_demos):
-        obs = env.reset()
-        episode = {"observations": [], "actions": []}
+    # Storage for all episodes
+    all_episodes = []
+    successes = 0
 
-        done = False
-        while not done:
-            action = scripted_policy(obs, robot)
-            episode["observations"].append(obs)
-            episode["actions"].append(action)
-            obs, reward, done, info = env.step(action)
+    t_start = time.time()
 
-        demos.append(episode)
-        print(f"  Demo {i+1}/{n_demos} — steps: {len(episode['actions'])}, success: {info.get('success', 'N/A')}")
+    for ep in range(n_demos):
+        obs = env.reset(seed=seed + ep)
+        policy.reset()
 
-    # Save as HDF5 (LeRobot format)
-    save_path = output_dir / f"{robot}_{task}_demos.hdf5"
-    # TODO: Serialize demos list to HDF5
-    print(f"Saved {n_demos} demos to {save_path}")
+        episode_data = {
+            "actions": [],
+            "ee_pos": [],
+            "ee_quat": [],
+            "proprioception": [],
+            "gripper_pos": [],
+            "images": [],
+        }
+
+        terminated = False
+        truncated = False
+        step_count = 0
+
+        while not terminated and not truncated:
+            # Get action from scripted policy
+            cube_pos = env.get_cube_pos()
+            target_pos = env.get_target_pos()
+            action = policy.get_action(obs, cube_pos, target_pos)
+
+            if action is None:
+                # Policy says done
+                break
+
+            # Record pre-step observation + action
+            episode_data["actions"].append(action.copy())
+            episode_data["ee_pos"].append(obs["ee_pos"].copy())
+            episode_data["ee_quat"].append(obs["ee_quat"].copy())
+            episode_data["proprioception"].append(obs["proprioception"].copy())
+            episode_data["gripper_pos"].append(obs["gripper_pos"].copy())
+            episode_data["images"].append(obs["image"].copy())
+
+            # Step environment
+            obs, reward, terminated, truncated, info = env.step(action)
+            step_count += 1
+
+        success = info.get("success", False) if step_count > 0 else False
+        successes += int(success)
+
+        # Convert lists to numpy arrays
+        for key in episode_data:
+            episode_data[key] = np.array(episode_data[key])
+
+        episode_data["success"] = success
+        episode_data["n_steps"] = step_count
+        all_episodes.append(episode_data)
+
+        if verbose:
+            elapsed = time.time() - t_start
+            rate = (ep + 1) / elapsed
+            print(
+                f"  [{ep+1:4d}/{n_demos}] steps={step_count:3d} "
+                f"success={success} "
+                f"({rate:.1f} ep/s, total_success={successes}/{ep+1})"
+            )
+
+    # Save to HDF5
+    save_path = output_dir / f"{robot}_pick_place.hdf5"
+    _save_hdf5(all_episodes, save_path, robot)
+
+    elapsed = time.time() - t_start
+    success_rate = successes / n_demos * 100
+    print(f"\nDone: {n_demos} episodes in {elapsed:.1f}s")
+    print(f"Success rate: {success_rate:.1f}% ({successes}/{n_demos})")
+    print(f"Saved to: {save_path}")
+
+    env.close()
+    return save_path
+
+
+def _save_hdf5(episodes: list[dict], path: Path, robot: str):
+    """
+    Save demonstrations in HDF5 format.
+
+    Structure:
+        /attrs: robot, n_episodes, total_steps
+        /episode_0/
+            actions: (T, 4) float32
+            ee_pos: (T, 3) float32
+            ee_quat: (T, 4) float32
+            proprioception: (T, n_joints) float32
+            gripper_pos: (T, 1) float32
+            images: (T, H, W, 3) uint8
+            attrs: success, n_steps
+        /episode_1/
+            ...
+    """
+    with h5py.File(path, "w") as f:
+        # Global metadata
+        f.attrs["robot"] = robot
+        f.attrs["n_episodes"] = len(episodes)
+        f.attrs["total_steps"] = sum(ep["n_steps"] for ep in episodes)
+        f.attrs["success_rate"] = (
+            sum(ep["success"] for ep in episodes) / len(episodes)
+        )
+
+        for i, ep in enumerate(episodes):
+            grp = f.create_group(f"episode_{i}")
+            grp.attrs["success"] = ep["success"]
+            grp.attrs["n_steps"] = ep["n_steps"]
+
+            # Store arrays with compression
+            for key in ("actions", "ee_pos", "ee_quat", "proprioception", "gripper_pos"):
+                if len(ep[key]) > 0:
+                    grp.create_dataset(
+                        key, data=ep[key].astype(np.float32),
+                        compression="gzip", compression_opts=4
+                    )
+
+            # Images: store with heavier compression
+            if len(ep["images"]) > 0:
+                grp.create_dataset(
+                    "images", data=ep["images"],
+                    compression="gzip", compression_opts=6,
+                    chunks=(1, *ep["images"].shape[1:]),
+                )
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate sim demos")
-    parser.add_argument("--robot", required=True, choices=["franka", "ur5", "so101"])
-    parser.add_argument("--task", default="pick", choices=["pick"])
-    parser.add_argument("--n_demos", type=int, default=50)
-    parser.add_argument("--out", type=str, default="data/demos")
+    parser = argparse.ArgumentParser(
+        description="Generate sim pick-and-place demonstrations"
+    )
+    parser.add_argument(
+        "--robot", choices=list(SUPPORTED_ROBOTS),
+        help="Robot to generate demos for"
+    )
+    parser.add_argument("--all", action="store_true", help="Generate for all robots")
+    parser.add_argument("--n_demos", type=int, default=50, help="Episodes per robot")
+    parser.add_argument("--out", type=str, default="data/demos", help="Output directory")
+    parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("--max_steps", type=int, default=300, help="Max steps/episode")
     args = parser.parse_args()
 
-    print(f"Generating {args.n_demos} demos for {args.robot}/{args.task}")
-    collect_demos(args.robot, args.task, args.n_demos, Path(args.out))
+    if not args.robot and not args.all:
+        parser.error("Specify --robot or --all")
+
+    robots = list(SUPPORTED_ROBOTS) if args.all else [args.robot]
+
+    for robot in robots:
+        print(f"\n{'='*60}")
+        print(f"Generating {args.n_demos} demos for: {robot}")
+        print(f"{'='*60}")
+        collect_demos(
+            robot=robot,
+            n_demos=args.n_demos,
+            output_dir=Path(args.out),
+            seed=args.seed,
+            max_episode_steps=args.max_steps,
+        )
 
 
 if __name__ == "__main__":
     main()
+

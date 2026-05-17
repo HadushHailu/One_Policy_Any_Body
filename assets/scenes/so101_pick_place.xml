@@ -1,0 +1,47 @@
+<mujoco model="so101_pick_place">
+  <!--
+    SO-101 pick-and-place scene.
+    Robot: 6-DoF SO-101 low-cost arm ($300)
+    Task: Pick a cube from random position, place in target zone.
+    Note: Smaller workspace (~0.27m) — table/cube positioned closer.
+  -->
+  <include file="../robots/so101/so101.xml" />
+
+  <statistic center="0.1 0 0.15" extent="0.4" />
+  <option timestep="0.002" gravity="0 0 -9.81" integrator="implicitfast" />
+  <visual>
+    <headlight ambient="0.4 0.4 0.4" diffuse="0.8 0.8 0.8" specular="0.1 0.1 0.1" />
+  </visual>
+
+  <worldbody>
+    <!-- Floor -->
+    <geom name="floor" type="plane" size="1 1 0.01" rgba="0.2 0.2 0.2 1"
+          contype="1" conaffinity="1" />
+    <light pos="0 0 1.5" dir="0 0 -1" diffuse="0.8 0.8 0.8" />
+
+    <!-- Small table (SO-101 workspace is ~0.27m) -->
+    <body name="table" pos="0.15 0 -0.01">
+      <geom name="table_surface" type="box" size="0.15 0.15 0.01"
+            rgba="0.55 0.4 0.25 1" contype="1" conaffinity="1"
+            friction="0.8 0.005 0.001" />
+    </body>
+
+    <!-- Smaller cube (1cm — appropriate for SO-101 gripper) -->
+    <body name="cube" pos="0.15 0.03 0.015">
+      <freejoint name="cube_joint" />
+      <geom name="cube_geom" type="box" size="0.01 0.01 0.01"
+            mass="0.03" rgba="0.9 0.1 0.1 1" condim="4"
+            friction="1.0 0.005 0.001" contype="1" conaffinity="1" />
+    </body>
+
+    <!-- Target zone -->
+    <site name="target_zone" pos="0.15 -0.06 0.005" size="0.03 0.03 0.002"
+          rgba="0.1 0.8 0.1 0.4" type="box" />
+
+    <!-- Overhead camera -->
+    <camera name="overhead" pos="0.12 0 0.5" xyaxes="1 0 0 0 -1 0" fovy="50" />
+
+    <!-- Front camera -->
+    <camera name="front" pos="0.4 0 0.2" xyaxes="0 1 0 -0.3 0 1" fovy="50" />
+  </worldbody>
+</mujoco>
