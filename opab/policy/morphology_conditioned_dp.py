@@ -1,20 +1,28 @@
 """
-Morphology-Conditioned Diffusion Policy — Core implementation
+Morphology-Conditioned Diffusion Policy — Core implementation.
 
-The main policy that combines:
-- 1D U-Net diffusion model for action generation
-- FiLM conditioning from morphology descriptor
-- ResNet-18 observation encoder
-- Action chunking (predict H steps, execute k)
+Combines:
+  - 1D U-Net diffusion backbone for action-sequence denoising
+  - FiLM conditioning from morphology descriptor
+  - ResNet-18 observation encoder
+  - Action chunking (predict H, execute k)
+  - DDPM training / DDIM inference
 """
 
 from __future__ import annotations
 
+import logging
+
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
+from diffusers import DDIMScheduler, DDPMScheduler
 
 from opab.model.diffusion.conditional_unet1d import ConditionalUnet1D
 from opab.model.morphology_encoder import MorphologyEncoder
+from opab.model.vision.obs_encoder import ObsEncoder
+
+logger = logging.getLogger(__name__)
 
 
 class MorphologyConditionedDP(nn.Module):
@@ -29,39 +37,124 @@ class MorphologyConditionedDP(nn.Module):
         super().__init__()
         self.cfg = cfg
 
-        # TODO: Initialize components
-        # self.obs_encoder = ...        # ResNet-18 + proprio MLP
-        # self.morph_encoder = ...      # URDF features → 32-dim
-        # self.noise_net = ...          # 1D U-Net with FiLM
-        # self.noise_scheduler = ...    # DDPM/DDIM
-        # self.ema = ...                # EMA wrapper
+        # ---- Observation encoder ----
+        self.obs_encoder = ObsEncoder(
+            obs_horizon=cfg.action.obs_horizon,
+            proprio_dim=cfg.proprio_encoder.input_dim,
+            output_dim=cfg.obs_encoder.output_dim,
+            pretrained=cfg.obs_encoder.pretrained,
+            frozen=cfg.obs_encoder.get("frozen", False),
+        )
 
-        raise NotImplementedError("Week 1-2 deliverable")
+        # ---- Morphology encoder ----
+        self.morph_encoder = MorphologyEncoder(cfg)
 
-    def compute_loss(self, batch: dict) -> torch.Tensor:
+        # ---- 1D U-Net noise network ----
+        self.noise_net = ConditionalUnet1D(
+            action_dim=cfg.action.action_dim,
+            cond_dim=cfg.obs_encoder.output_dim,
+            morph_dim=cfg.morphology_encoder.output_dim,
+            down_dims=list(cfg.unet.down_dims),
+            kernel_size=cfg.unet.kernel_size,
+        )
+
+        # ---- Noise scheduler (training) ----
+        schedule_map = {"cosine": "squaredcos_cap_v2", "linear": "linear"}
+        beta_schedule = schedule_map.get(
+            cfg.diffusion.noise_schedule, cfg.diffusion.noise_schedule
+        )
+
+        self.noise_scheduler = DDPMScheduler(
+            num_train_timesteps=cfg.diffusion.num_train_timesteps,
+            beta_schedule=beta_schedule,
+            prediction_type=cfg.diffusion.prediction_type,
+            clip_sample=False,
+        )
+
+        # ---- Inference scheduler config ----
+        self._inference_scheduler_cfg = dict(
+            num_train_timesteps=cfg.diffusion.num_train_timesteps,
+            beta_schedule=beta_schedule,
+            prediction_type=cfg.diffusion.prediction_type,
+            clip_sample=False,
+        )
+        self._num_inference_steps = cfg.diffusion.num_inference_steps
+
+        # ---- Dimensions ----
+        self.action_dim = cfg.action.action_dim
+        self.action_horizon = cfg.action.horizon
+        self.execute_horizon = cfg.action.execute_horizon
+
+        n_params = sum(p.numel() for p in self.parameters())
+        logger.info(f"MorphologyConditionedDP: {n_params / 1e6:.1f}M parameters")
+
+    # ==================================================================
+    # Training
+    # ==================================================================
+    def compute_loss(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         """
-        Diffusion training loss (behavior cloning).
+        Diffusion denoising loss (ε-prediction).
 
-        1. Sample noise ε ~ N(0, I)
-        2. Sample timestep t ~ Uniform(1, T)
-        3. Noise the action: a_t = √ᾱ_t · a_0 + √(1-ᾱ_t) · ε
-        4. Predict noise: ε̂ = ε_θ(a_t, t, obs, morph)
-        5. Loss = ||ε - ε̂||²
+        Args:
+            batch: dict with keys obs_images, obs_proprio, action, morph_vec
+
+        Returns:
+            Scalar MSE loss.
         """
-        raise NotImplementedError
+        obs_embed = self.obs_encoder(batch["obs_images"], batch["obs_proprio"])
+        morph_embed = self.morph_encoder(batch["morph_vec"])
 
+        # (B, horizon, action_dim) → (B, action_dim, horizon) for Conv1D
+        action = batch["action"].permute(0, 2, 1)
+
+        noise = torch.randn_like(action)
+        B = action.shape[0]
+        timesteps = torch.randint(
+            0,
+            self.noise_scheduler.config.num_train_timesteps,
+            (B,),
+            device=action.device,
+        ).long()
+
+        noisy_action = self.noise_scheduler.add_noise(action, noise, timesteps)
+        noise_pred = self.noise_net(noisy_action, timesteps, obs_embed, morph_embed)
+
+        return F.mse_loss(noise_pred, noise)
+
+    # ==================================================================
+    # Inference
+    # ==================================================================
     @torch.no_grad()
-    def predict_action(self, obs: dict) -> torch.Tensor:
+    def predict_action(
+        self,
+        obs_images: torch.Tensor,
+        obs_proprio: torch.Tensor,
+        morph_vec: torch.Tensor,
+    ) -> torch.Tensor:
         """
-        Generate action chunk via DDIM denoising.
+        Generate an action chunk via DDIM denoising.
 
-        1. Start from a_T ~ N(0, I)
-        2. For t = T, T-Δ, ..., 0:
-              ε̂ = ε_θ(a_t, t, obs, morph)
-              a_{t-Δ} = DDIM_step(a_t, ε̂, t)
-        3. Return a_0[:execute_horizon]
+        Returns:
+            actions: (B, execute_horizon, action_dim)
         """
-        raise NotImplementedError
+        obs_embed = self.obs_encoder(obs_images, obs_proprio)
+        morph_embed = self.morph_encoder(morph_vec)
+        B = obs_embed.shape[0]
+
+        scheduler = DDIMScheduler(**self._inference_scheduler_cfg)
+        scheduler.set_timesteps(self._num_inference_steps, device=obs_embed.device)
+
+        action = torch.randn(
+            B, self.action_dim, self.action_horizon, device=obs_embed.device
+        )
+
+        for t in scheduler.timesteps:
+            t_batch = t.unsqueeze(0).expand(B)
+            noise_pred = self.noise_net(action, t_batch, obs_embed, morph_embed)
+            action = scheduler.step(noise_pred, t, action).prev_sample
+
+        # (B, action_dim, horizon) → (B, horizon, action_dim), take first k
+        return action.permute(0, 2, 1)[:, : self.execute_horizon, :]
 
 
 class BaselineDP(nn.Module):
@@ -72,4 +165,4 @@ class BaselineDP(nn.Module):
 
     def __init__(self, cfg):
         super().__init__()
-        raise NotImplementedError
+        raise NotImplementedError("Week 6 deliverable")

@@ -119,18 +119,19 @@ class ConditionalUnet1D(nn.Module):
             down_dims[-1], down_dims[-1], total_cond_dim, kernel_size
         )
 
-        # Decoder (upsampling) with skip connections
+        # Decoder (upsampling) — mirrors encoder fully (one level per encoder level)
         self.decoder_blocks = nn.ModuleList()
         self.upsample = nn.ModuleList()
-        for i, out_ch in enumerate(reversed(down_dims[:-1])):
-            skip_ch = down_dims[-(i + 1)]
-            in_ch_dec = down_dims[-(i + 1)] + skip_ch  # concat skip
-            self.upsample.append(nn.ConvTranspose1d(down_dims[-(i + 1)], down_dims[-(i + 1)], 2, stride=2))
+        for i in range(len(down_dims)):
+            in_ch = down_dims[-(i + 1)]
+            skip_ch = in_ch  # skip from the corresponding encoder level
+            out_ch = down_dims[-(i + 2)] if i + 1 < len(down_dims) else down_dims[0]
+            self.upsample.append(nn.ConvTranspose1d(in_ch, in_ch, 2, stride=2))
             self.decoder_blocks.append(
-                ConditionalResidualBlock1D(in_ch_dec, out_ch, total_cond_dim, kernel_size)
+                ConditionalResidualBlock1D(in_ch + skip_ch, out_ch, total_cond_dim, kernel_size)
             )
 
-        # Final projection
+        # Final projection back to action_dim
         self.final_conv = nn.Sequential(
             nn.Conv1d(down_dims[0], down_dims[0], kernel_size, padding=kernel_size // 2),
             nn.ReLU(),
@@ -146,7 +147,7 @@ class ConditionalUnet1D(nn.Module):
     ) -> torch.Tensor:
         """Predict noise ε given noised action, timestep, observation, and morphology."""
         # Build conditioning vector
-        t_emb = self.time_embed(t)
+        t_emb = self.time_embed(t.float())
         cond = torch.cat([t_emb, obs, morph], dim=-1)
 
         # Encoder with skip connections
@@ -160,14 +161,11 @@ class ConditionalUnet1D(nn.Module):
         # Bottleneck
         h = self.bottleneck(h, cond)
 
-        # Decoder
-        for block, up, skip in zip(self.decoder_blocks, self.upsample, reversed(skips[1:])):
+        # Decoder — symmetric with encoder
+        for i, (block, up) in enumerate(zip(self.decoder_blocks, self.upsample)):
             h = up(h)
+            skip = skips[-(i + 1)]
             h = torch.cat([h, skip], dim=1)
             h = block(h, cond)
-
-        # Final upsample + skip from first encoder layer
-        if len(self.upsample) < len(skips):
-            h = torch.cat([h, skips[0]], dim=1) if h.shape == skips[0].shape else h
 
         return self.final_conv(h)

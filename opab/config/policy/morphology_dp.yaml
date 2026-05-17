@@ -13,7 +13,7 @@ diffusion:
 action:
   horizon: 16                     # predict 16 future actions
   obs_horizon: 2                  # condition on 2 observations
-  action_dim: 7                   # 6-DoF joints + gripper
+  action_dim: 4                   # task-space: [dx, dy, dz, gripper]
   execute_horizon: 8              # execute 8, then re-plan
 
 # ---- U-Net ----
@@ -40,7 +40,7 @@ proprio_encoder:
 
 # ---- Morphology Encoder ----
 morphology_encoder:
-  input_dim: 42                  # 7 joints × 6 features (padded)
+  input_dim: 46                  # 7 joints × 6 features + 4 global = 46
   hidden_dims: [64, 64]
   output_dim: 32
   activation: relu
