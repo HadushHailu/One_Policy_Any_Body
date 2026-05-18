@@ -4,11 +4,12 @@ OPAB environment package.
 Provides unified manipulation environments for multiple robot embodiments.
 """
 from opab.env.base_env import PickPlaceEnv, RobotConfig
-from opab.env.scripted_policies import ScriptedPickPlace
+from opab.env.scripted_policies import ScriptedPickPlace, ScriptedStack
 from opab.env.domain_randomization import DomainRandomizer, DRConfig
 
 
 SUPPORTED_ROBOTS = ("franka", "ur5", "so101")
+SUPPORTED_TASKS = ("pick_place", "stack")
 
 
 def make_env(
@@ -18,6 +19,7 @@ def make_env(
     max_episode_steps: int = 300,
     seed: int | None = None,
     domain_randomization: bool = False,
+    task: str = "pick_place",
 ) -> PickPlaceEnv:
     """
     Factory function — creates a PickPlaceEnv for the specified robot.
@@ -29,6 +31,7 @@ def make_env(
         max_episode_steps: Episode length limit
         seed: RNG seed for reproducibility
         domain_randomization: Enable DR (default off for Week 1)
+        task: One of 'pick_place', 'stack'
 
     Returns:
         PickPlaceEnv instance ready for reset()/step()
@@ -37,6 +40,10 @@ def make_env(
         raise ValueError(
             f"Unknown robot '{robot}'. Supported: {SUPPORTED_ROBOTS}"
         )
+    if task not in SUPPORTED_TASKS:
+        raise ValueError(
+            f"Unknown task '{task}'. Supported: {SUPPORTED_TASKS}"
+        )
 
     env = PickPlaceEnv(
         robot=robot,
@@ -44,6 +51,7 @@ def make_env(
         control_freq=control_freq,
         max_episode_steps=max_episode_steps,
         seed=seed,
+        task=task,
     )
 
     # Attach domain randomizer (inactive unless enabled)
@@ -58,7 +66,9 @@ __all__ = [
     "PickPlaceEnv",
     "RobotConfig",
     "ScriptedPickPlace",
+    "ScriptedStack",
     "DomainRandomizer",
     "DRConfig",
     "SUPPORTED_ROBOTS",
+    "SUPPORTED_TASKS",
 ]

@@ -155,6 +155,9 @@ def main():
     parser.add_argument(
         "--robot", default="franka", choices=["franka", "ur5", "so101"]
     )
+    parser.add_argument(
+        "--task", default="pick_place", choices=["pick_place", "stack"]
+    )
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--render", action="store_true", help="Render with viewer")
     parser.add_argument("--device", default="cuda")
@@ -179,9 +182,9 @@ def main():
     morph_vec = MorphologyEncoder.from_robot_config(robot_cfg)
 
     # Create env
-    env = make_env(args.robot, seed=args.seed)
+    env = make_env(args.robot, seed=args.seed, task=args.task)
 
-    logger.info(f"\nEvaluating {args.robot} policy for {args.n_episodes} episodes...")
+    logger.info(f"\nEvaluating {args.robot} / {args.task} for {args.n_episodes} episodes...")
     logger.info(f"{'='*50}")
 
     successes = []

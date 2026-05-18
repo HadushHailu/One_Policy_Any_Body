@@ -161,6 +161,10 @@ class PickPlaceEnv:
       - gripper: 0.0 = open, 1.0 = closed
 
     Works for Franka (7-DOF), UR5 (6-DOF), SO-101 (6-DOF).
+
+    Tasks:
+      - 'pick_place': pick cube_A, place at target zone (default)
+      - 'stack': pick cube_A, stack on top of cube_B
     """
 
     def __init__(
@@ -171,12 +175,14 @@ class PickPlaceEnv:
         max_episode_steps: int = 300,
         seed: Optional[int] = None,
         kinematic_mode: bool = False,
+        task: str = "pick_place",
     ):
         self.robot_name = robot
         self.cfg = RobotConfig(robot)
         self.image_size = image_size
         self.max_episode_steps = max_episode_steps
         self.kinematic_mode = kinematic_mode
+        self.task = task
 
         # Physics = 500Hz, control = 20Hz → 25 substeps
         self.control_dt = 1.0 / control_freq
@@ -274,6 +280,21 @@ class PickPlaceEnv:
     <camera name="overhead_cam" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
             xyaxes="1 0 0 0 1 0" fovy="50" />
 """
+
+        # For stacking task: inject a second cube (cube_B) at the target position
+        if self.task == "stack":
+            cube_b_pos = cfg.target_pos.copy()
+            # Place cube_B on the surface (same height as cube_A default)
+            cube_b_pos[2] = cfg.cube_pos[2]
+            objects += f"""
+    <body name="cube_b" pos="{cube_b_pos[0]} {cube_b_pos[1]} {cube_b_pos[2]}">
+      <freejoint name="cube_b_joint" />
+      <geom name="cube_b_geom" type="box" size="{cfg.cube_size} {cfg.cube_size} {cfg.cube_size}"
+            mass="{cfg.cube_mass}" rgba="0.1 0.1 0.9 1" condim="4"
+            friction="1.5 0.005 0.001" contype="1" conaffinity="1"
+            solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" />
+    </body>
+"""
         # Inject before the LAST </worldbody> (after inlining there may be multiple)
         idx = xml.rfind("</worldbody>")
         xml = xml[:idx] + objects + "  </worldbody>" + xml[idx + len("</worldbody>"):]
@@ -340,6 +361,14 @@ class PickPlaceEnv:
         # Target zone
         self._target_site_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "target_zone"
+        )
+
+        # Cube B (stacking target) — only present in 'stack' task
+        self._cube_b_body_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_BODY, "cube_b"
+        )
+        self._cube_b_joint_id = mujoco.mj_name2id(
+            self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_b_joint"
         )
 
         # Camera
@@ -553,6 +582,11 @@ class PickPlaceEnv:
 
         mujoco.mj_resetData(self.model, self.data)
 
+        # Domain randomization (if attached by make_env with DR enabled)
+        if hasattr(self, 'domain_randomizer'):
+            self.domain_randomizer.reset_to_nominal()
+            self.domain_randomizer.randomize(self._rng)
+
         # Set robot to home pose (above table, ready to manipulate)
         if hasattr(self.cfg, 'home_qpos'):
             for joint_name, qval in self.cfg.home_qpos.items():
@@ -576,6 +610,15 @@ class PickPlaceEnv:
             dy = self._rng.uniform(-r, r)
             self.data.qpos[cube_qpos_adr] += dx
             self.data.qpos[cube_qpos_adr + 1] += dy
+
+        # Randomize cube_B position (stacking task)
+        if self._cube_b_joint_id >= 0:
+            cb_qpos_adr = self.model.jnt_qposadr[self._cube_b_joint_id]
+            r = self.cfg.cube_randomize_range
+            dx = self._rng.uniform(-r, r)
+            dy = self._rng.uniform(-r, r)
+            self.data.qpos[cb_qpos_adr] += dx
+            self.data.qpos[cb_qpos_adr + 1] += dy
 
         mujoco.mj_forward(self.model, self.data)
         self._step_count = 0
@@ -694,7 +737,10 @@ class PickPlaceEnv:
         }
 
     def _check_success(self) -> bool:
-        """Check if cube is in the target zone."""
+        """Check if cube is in the target zone (pick_place) or stacked (stack)."""
+        if self.task == "stack":
+            return self._check_stack_success()
+
         if self._cube_body_id < 0 or self._target_site_id < 0:
             return False
 
@@ -708,10 +754,32 @@ class PickPlaceEnv:
 
         return dist_xy < self.cfg.success_threshold and height_ok
 
+    def _check_stack_success(self) -> bool:
+        """Check if cube_A is stacked on top of cube_B."""
+        if self._cube_body_id < 0 or self._cube_b_body_id < 0:
+            return False
+
+        cube_a_pos = self.data.xpos[self._cube_body_id]
+        cube_b_pos = self.data.xpos[self._cube_b_body_id]
+
+        # cube_A should be directly above cube_B
+        dist_xy = np.linalg.norm(cube_a_pos[:2] - cube_b_pos[:2])
+        # Expected height = cube_B_z + 2 * cube_size (both cube half-sizes)
+        expected_z = cube_b_pos[2] + 2 * self.cfg.cube_size
+        height_ok = abs(cube_a_pos[2] - expected_z) < 0.02
+
+        return dist_xy < self.cfg.success_threshold and height_ok
+
     def get_cube_pos(self) -> np.ndarray:
         """Get current cube position (for scripted policies)."""
         if self._cube_body_id >= 0:
             return self.data.xpos[self._cube_body_id].copy()
+        return np.zeros(3)
+
+    def get_cube_b_pos(self) -> np.ndarray:
+        """Get current cube_B position (for stacking policy)."""
+        if self._cube_b_body_id >= 0:
+            return self.data.xpos[self._cube_b_body_id].copy()
         return np.zeros(3)
 
     def get_target_pos(self) -> np.ndarray:

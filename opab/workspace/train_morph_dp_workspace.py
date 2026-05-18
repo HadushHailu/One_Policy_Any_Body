@@ -39,14 +39,36 @@ class TrainMorphDPWorkspace:
         cfg = self.cfg
 
         # ----------------------------------------------------------
-        # 1. Data
+        # 1. Data — Load demos from one or many robots/tasks
         # ----------------------------------------------------------
-        robot_name = cfg.robot.name
-        data_path = os.path.join("data", "demos", f"{robot_name}_pick_place.hdf5")
+        # Multi-robot mode: cfg.training.robots = ["franka", "ur5", "so101"]
+        # Multi-task mode:  cfg.training.tasks  = ["pick_place", "stack"]
+        # Falls back to single-robot mode via cfg.robot.name
+        robot_names = list(cfg.training.get("robots", [cfg.robot.name]))
+        task_names = list(cfg.training.get("tasks", ["pick_place"]))
+
+        hdf5_paths = []
+        robot_configs = []
+        for robot_name in robot_names:
+            robot_cfg = self._load_robot_config(robot_name, cfg)
+            for task_name in task_names:
+                path = os.path.join("data", "demos", f"{robot_name}_{task_name}.hdf5")
+                if os.path.exists(path):
+                    hdf5_paths.append(path)
+                    robot_configs.append(robot_cfg)
+                    logger.info(f"Found demo file: {path}")
+                else:
+                    logger.warning(f"Demo file not found, skipping: {path}")
+
+        if not hdf5_paths:
+            raise FileNotFoundError(
+                f"No demo files found for robots={robot_names}, tasks={task_names}. "
+                f"Run scripts/generate_sim_demos.py first."
+            )
 
         dataset = MultiRobotDataset(
-            hdf5_paths=[data_path],
-            robot_configs=[cfg.robot],
+            hdf5_paths=hdf5_paths,
+            robot_configs=robot_configs,
             obs_horizon=cfg.policy.action.obs_horizon,
             action_horizon=cfg.policy.action.horizon,
             max_proprio_dim=cfg.policy.proprio_encoder.input_dim,
@@ -139,8 +161,12 @@ class TrainMorphDPWorkspace:
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": avg_loss,
                     "normalizer": dataset.normalizer.get_state(),
-                    "config": OmegaConf.to_container(cfg, resolve=True),
                 }
+                # Save config safely (resolve=False avoids Hydra interpolation errors)
+                try:
+                    ckpt["config"] = OmegaConf.to_container(cfg, resolve=True)
+                except Exception:
+                    ckpt["config"] = OmegaConf.to_container(cfg, resolve=False)
                 torch.save(ckpt, ckpt_dir / "latest.pt")
 
                 if avg_loss < best_loss:
@@ -152,6 +178,19 @@ class TrainMorphDPWorkspace:
             f"Training complete — {cfg.training.num_epochs} epochs, "
             f"best loss {best_loss:.6f}"
         )
+
+    # ==================================================================
+    @staticmethod
+    def _load_robot_config(robot_name: str, cfg: DictConfig):
+        """Load robot config by name, falling back to cfg.robot for the default."""
+        from omegaconf import OmegaConf
+        config_path = Path(__file__).resolve().parents[1] / "config" / "robot" / f"{robot_name}.yaml"
+        if config_path.exists():
+            return OmegaConf.load(config_path)
+        # Fallback to the active config's robot section
+        if cfg.robot.name == robot_name:
+            return cfg.robot
+        raise FileNotFoundError(f"Robot config not found: {config_path}")
 
     # ==================================================================
     def eval(self, policy=None, normalizer=None) -> float:

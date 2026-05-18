@@ -21,7 +21,7 @@ import numpy as np
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from opab.env import make_env, ScriptedPickPlace, SUPPORTED_ROBOTS
+from opab.env import make_env, ScriptedPickPlace, ScriptedStack, SUPPORTED_ROBOTS, SUPPORTED_TASKS
 
 
 def collect_demos(
@@ -31,6 +31,8 @@ def collect_demos(
     seed: int = 0,
     max_episode_steps: int = 300,
     verbose: bool = True,
+    domain_randomization: bool = False,
+    task: str = "pick_place",
 ):
     """
     Collect demonstrations using the scripted pick-and-place policy.
@@ -48,8 +50,17 @@ def collect_demos(
     """
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    env = make_env(robot=robot, seed=seed, max_episode_steps=max_episode_steps)
-    policy = ScriptedPickPlace(robot_name=robot)
+    env = make_env(
+        robot=robot, seed=seed, max_episode_steps=max_episode_steps,
+        domain_randomization=domain_randomization, task=task,
+    )
+
+    if task == "stack":
+        from opab.env.base_env import RobotConfig
+        cube_size = RobotConfig(robot).cube_size
+        policy = ScriptedStack(robot_name=robot, cube_size=cube_size)
+    else:
+        policy = ScriptedPickPlace(robot_name=robot)
 
     # Storage for all episodes
     all_episodes = []
@@ -77,8 +88,12 @@ def collect_demos(
         while not terminated and not truncated:
             # Get action from scripted policy
             cube_pos = env.get_cube_pos()
-            target_pos = env.get_target_pos()
-            action = policy.get_action(obs, cube_pos, target_pos)
+            if task == "stack":
+                cube_b_pos = env.get_cube_b_pos()
+                action = policy.get_action(obs, cube_pos, cube_b_pos)
+            else:
+                target_pos = env.get_target_pos()
+                action = policy.get_action(obs, cube_pos, target_pos)
 
             if action is None:
                 # Policy says done
@@ -117,7 +132,8 @@ def collect_demos(
             )
 
     # Save to HDF5
-    save_path = output_dir / f"{robot}_pick_place.hdf5"
+    task_name = "stack" if task == "stack" else "pick_place"
+    save_path = output_dir / f"{robot}_{task_name}.hdf5"
     _save_hdf5(all_episodes, save_path, robot)
 
     elapsed = time.time() - t_start
@@ -155,6 +171,7 @@ def _save_hdf5(episodes: list[dict], path: Path, robot: str):
         f.attrs["success_rate"] = (
             sum(ep["success"] for ep in episodes) / len(episodes)
         )
+        f.attrs["domain_randomization"] = True  # flag for downstream
 
         for i, ep in enumerate(episodes):
             grp = f.create_group(f"episode_{i}")
@@ -188,9 +205,12 @@ def main():
     )
     parser.add_argument("--all", action="store_true", help="Generate for all robots")
     parser.add_argument("--n_demos", type=int, default=50, help="Episodes per robot")
+    parser.add_argument("--task", choices=list(SUPPORTED_TASKS), default="pick_place",
+                        help="Task type: pick_place or stack")
     parser.add_argument("--out", type=str, default="data/demos", help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--max_steps", type=int, default=300, help="Max steps/episode")
+    parser.add_argument("--dr", action="store_true", help="Enable domain randomization")
     args = parser.parse_args()
 
     if not args.robot and not args.all:
@@ -208,6 +228,8 @@ def main():
             output_dir=Path(args.out),
             seed=args.seed,
             max_episode_steps=args.max_steps,
+            domain_randomization=args.dr,
+            task=args.task,
         )
 
 
