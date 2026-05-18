@@ -2,6 +2,11 @@
 name: morphology_dp
 _target_: opab.policy.morphology_conditioned_dp.MorphologyConditionedDP
 
+# ---- Task Conditioning ----
+n_tasks: 2                        # pick_place=0, stack=1
+task_embed_dim: 32
+use_task_conditioning: true
+
 # ---- Diffusion ----
 diffusion:
   num_train_timesteps: 100

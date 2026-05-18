@@ -21,9 +21,10 @@ from omegaconf import OmegaConf
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from opab.dataset.normalizer import Normalizer
-from opab.env import make_env
+from opab.env import make_env, SUPPORTED_TASKS
 from opab.model.morphology_encoder import MorphologyEncoder
 from opab.policy.morphology_conditioned_dp import MorphologyConditionedDP
+from opab.policy.temporal_ensemble import TemporalEnsemble
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)
@@ -52,11 +53,14 @@ def run_episode(
     policy,
     normalizer,
     morph_vec,
+    task_id: int = 0,
     device="cuda",
     obs_horizon=2,
     execute_horizon=8,
     max_proprio_dim=7,
     render=False,
+    use_ensemble=False,
+    ensemble_decay=0.01,
 ):
     """
     Run one episode with the trained policy.
@@ -76,6 +80,16 @@ def run_episode(
     trajectory = []
     total_steps = 0
     action_queue = []
+
+    # Temporal ensemble
+    ensemble = None
+    if use_ensemble:
+        ensemble = TemporalEnsemble(
+            action_dim=policy.action_dim, decay=ensemble_decay
+        )
+
+    # Task ID tensor
+    task_id_tensor = torch.tensor([task_id], dtype=torch.long, device=device)
 
     while total_steps < env.max_episode_steps:
         # If no actions queued, run inference
@@ -114,9 +128,9 @@ def run_episode(
 
             morph_batch = morph_vec.unsqueeze(0).to(device)  # (1, 46)
 
-            # Run policy inference (DDIM)
+            # Run policy inference (DDIM) with task conditioning
             action_chunk = policy.predict_action(
-                obs_images, obs_proprio, morph_batch
+                obs_images, obs_proprio, morph_batch, task_id=task_id_tensor
             )  # (1, execute_horizon, action_dim)
 
             # Unnormalize actions
@@ -124,7 +138,20 @@ def run_episode(
                 "actions", action_chunk[0]
             )  # (execute_horizon, action_dim)
 
-            action_queue = list(action_chunk.cpu().numpy())
+            chunk_np = action_chunk.cpu().numpy()
+
+            if use_ensemble and ensemble is not None:
+                ensemble.add_chunk(total_steps, chunk_np)
+                # Generate actions from ensemble for next execute_horizon steps
+                action_queue = []
+                for i in range(execute_horizon):
+                    step = total_steps + i
+                    try:
+                        action_queue.append(ensemble.get_action(step))
+                    except ValueError:
+                        break
+            else:
+                action_queue = list(chunk_np)
 
         # Execute next action
         action = action_queue.pop(0)
@@ -160,6 +187,8 @@ def main():
     )
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--render", action="store_true", help="Render with viewer")
+    parser.add_argument("--ensemble", action="store_true", help="Enable temporal ensemble")
+    parser.add_argument("--ensemble-decay", type=float, default=0.01, help="Ensemble decay rate")
     parser.add_argument("--device", default="cuda")
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
@@ -185,7 +214,12 @@ def main():
     env = make_env(args.robot, seed=args.seed, task=args.task)
 
     logger.info(f"\nEvaluating {args.robot} / {args.task} for {args.n_episodes} episodes...")
+    if args.ensemble:
+        logger.info(f"  Temporal ensemble: ON (decay={args.ensemble_decay})")
     logger.info(f"{'='*50}")
+
+    # Task ID for conditioning
+    task_id = SUPPORTED_TASKS.index(args.task)  # 0=pick_place, 1=stack
 
     successes = []
     all_steps = []
@@ -197,11 +231,14 @@ def main():
             policy,
             normalizer,
             morph_vec,
+            task_id=task_id,
             device=device,
             obs_horizon=cfg.policy.action.obs_horizon,
             execute_horizon=cfg.policy.action.execute_horizon,
             max_proprio_dim=cfg.policy.proprio_encoder.input_dim,
             render=args.render,
+            use_ensemble=args.ensemble,
+            ensemble_decay=args.ensemble_decay,
         )
 
         # Compute total motion (how much did the EE move?)

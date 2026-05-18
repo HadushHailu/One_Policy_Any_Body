@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 
 class MultiRobotDataset(Dataset):
     """
-    Iterable of ``(obs_images, obs_proprio, action_chunk, morph_vec)``
+    Iterable of ``(obs_images, obs_proprio, action_chunk, morph_vec, task_id)``
     sampled from one or more robot demonstration files.
 
     Parameters
@@ -39,7 +39,12 @@ class MultiRobotDataset(Dataset):
         Length of the predicted action chunk (default 16).
     max_proprio_dim : int
         Pad proprioception to this many joints (default 7).
+    task_ids : list[int] | None
+        Task ID per HDF5 file. If None, inferred from filename
+        ('pick_place' -> 0, 'stack' -> 1).
     """
+
+    TASK_NAME_TO_ID = {"pick_place": 0, "stack": 1}
 
     def __init__(
         self,
@@ -48,6 +53,7 @@ class MultiRobotDataset(Dataset):
         obs_horizon: int = 2,
         action_horizon: int = 16,
         max_proprio_dim: int = 7,
+        task_ids: list[int] | None = None,
     ):
         super().__init__()
         self.obs_horizon = obs_horizon
@@ -59,11 +65,18 @@ class MultiRobotDataset(Dataset):
         # ----------------------------------------------------------
         self.episodes: list[dict[str, np.ndarray]] = []
         self.morph_vecs: list[torch.Tensor] = []
+        self.task_id_per_episode: list[int] = []
 
-        for path, robot_cfg in zip(hdf5_paths, robot_configs):
+        for file_idx, (path, robot_cfg) in enumerate(zip(hdf5_paths, robot_configs)):
             path = Path(path)
             morph_vec = MorphologyEncoder.from_robot_config(robot_cfg)
             logger.info(f"Loading {path}  (morph_vec shape {morph_vec.shape})")
+
+            # Determine task_id for this file
+            if task_ids is not None:
+                tid = task_ids[file_idx]
+            else:
+                tid = self._infer_task_id(path)
 
             with h5py.File(path, "r") as f:
                 n_eps = int(f.attrs["n_episodes"])
@@ -77,6 +90,7 @@ class MultiRobotDataset(Dataset):
                         }
                     )
                     self.morph_vecs.append(morph_vec)
+                    self.task_id_per_episode.append(tid)
 
         # ----------------------------------------------------------
         # Build valid-sample index
@@ -109,6 +123,14 @@ class MultiRobotDataset(Dataset):
     # ==============================================================
     # helpers
     # ==============================================================
+    @staticmethod
+    def _infer_task_id(path: Path) -> int:
+        """Infer task_id from filename: 'pick_place' -> 0, 'stack' -> 1."""
+        name = path.stem.lower()
+        if "stack" in name:
+            return 1
+        return 0  # default pick_place
+
     def _pad_proprio(self, proprio: np.ndarray) -> np.ndarray:
         """Pad proprioception to ``max_proprio_dim`` joints."""
         if proprio.shape[-1] >= self.max_proprio_dim:
@@ -160,6 +182,7 @@ class MultiRobotDataset(Dataset):
         obs_proprio_t = torch.from_numpy(obs_proprio)
         action_chunk_t = torch.from_numpy(action_chunk)
         morph_vec = self.morph_vecs[ep_idx].clone()
+        task_id = torch.tensor(self.task_id_per_episode[ep_idx], dtype=torch.long)
 
         # ---- Normalise actions & proprio ----
         action_chunk_t = self.normalizer.normalize("actions", action_chunk_t)
@@ -170,4 +193,5 @@ class MultiRobotDataset(Dataset):
             "obs_proprio": obs_proprio_t,  # (obs_horizon, max_proprio_dim)
             "action": action_chunk_t,      # (action_horizon, action_dim)
             "morph_vec": morph_vec,         # (morph_feature_dim,)
+            "task_id": task_id,             # scalar long
         }

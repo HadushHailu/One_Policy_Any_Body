@@ -134,7 +134,7 @@ def collect_demos(
     # Save to HDF5
     task_name = "stack" if task == "stack" else "pick_place"
     save_path = output_dir / f"{robot}_{task_name}.hdf5"
-    _save_hdf5(all_episodes, save_path, robot)
+    _save_hdf5(all_episodes, save_path, robot, task=task_name)
 
     elapsed = time.time() - t_start
     success_rate = successes / n_demos * 100
@@ -146,7 +146,7 @@ def collect_demos(
     return save_path
 
 
-def _save_hdf5(episodes: list[dict], path: Path, robot: str):
+def _save_hdf5(episodes: list[dict], path: Path, robot: str, task: str = "pick_place"):
     """
     Save demonstrations in HDF5 format.
 
@@ -172,6 +172,8 @@ def _save_hdf5(episodes: list[dict], path: Path, robot: str):
             sum(ep["success"] for ep in episodes) / len(episodes)
         )
         f.attrs["domain_randomization"] = True  # flag for downstream
+        f.attrs["task"] = task
+        f.attrs["task_id"] = 0 if task == "pick_place" else 1
 
         for i, ep in enumerate(episodes):
             grp = f.create_group(f"episode_{i}")

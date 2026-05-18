@@ -25,6 +25,19 @@ from opab.model.vision.obs_encoder import ObsEncoder
 logger = logging.getLogger(__name__)
 
 
+class TaskEncoder(nn.Module):
+    """Learned task embedding for multi-task conditioning."""
+
+    def __init__(self, n_tasks: int = 2, embed_dim: int = 32):
+        super().__init__()
+        self.embedding = nn.Embedding(n_tasks, embed_dim)
+        self.embed_dim = embed_dim
+
+    def forward(self, task_id: torch.Tensor) -> torch.Tensor:
+        """task_id: (B,) long tensor → (B, embed_dim)"""
+        return self.embedding(task_id)
+
+
 class MorphologyConditionedDP(nn.Module):
     """
     Morphology-conditioned diffusion policy.
@@ -36,6 +49,12 @@ class MorphologyConditionedDP(nn.Module):
     def __init__(self, cfg):
         super().__init__()
         self.cfg = cfg
+
+        # ---- Task conditioning ----
+        n_tasks = cfg.get("n_tasks", 2)
+        task_embed_dim = cfg.get("task_embed_dim", 32)
+        self.task_encoder = TaskEncoder(n_tasks=n_tasks, embed_dim=task_embed_dim)
+        self.use_task_conditioning = cfg.get("use_task_conditioning", True)
 
         # ---- Observation encoder ----
         self.obs_encoder = ObsEncoder(
@@ -50,10 +69,15 @@ class MorphologyConditionedDP(nn.Module):
         self.morph_encoder = MorphologyEncoder(cfg)
 
         # ---- 1D U-Net noise network ----
+        # morph_dim includes task embedding when task conditioning is active
+        effective_morph_dim = cfg.morphology_encoder.output_dim
+        if self.use_task_conditioning:
+            effective_morph_dim += task_embed_dim
+
         self.noise_net = ConditionalUnet1D(
             action_dim=cfg.action.action_dim,
             cond_dim=cfg.obs_encoder.output_dim,
-            morph_dim=cfg.morphology_encoder.output_dim,
+            morph_dim=effective_morph_dim,
             down_dims=list(cfg.unet.down_dims),
             kernel_size=cfg.unet.kernel_size,
         )
@@ -91,18 +115,31 @@ class MorphologyConditionedDP(nn.Module):
     # ==================================================================
     # Training
     # ==================================================================
+    def _get_morph_cond(self, morph_vec: torch.Tensor, task_id: torch.Tensor | None) -> torch.Tensor:
+        """Combine morphology and task embeddings into a single conditioning vector."""
+        morph_embed = self.morph_encoder(morph_vec)
+        if self.use_task_conditioning and task_id is not None:
+            task_embed = self.task_encoder(task_id)
+            return torch.cat([morph_embed, task_embed], dim=-1)
+        elif self.use_task_conditioning:
+            # Default to task 0 if not provided (backward compat)
+            B = morph_vec.shape[0]
+            zeros = torch.zeros(B, self.task_encoder.embed_dim, device=morph_vec.device)
+            return torch.cat([morph_embed, zeros], dim=-1)
+        return morph_embed
+
     def compute_loss(self, batch: dict[str, torch.Tensor]) -> torch.Tensor:
         """
         Diffusion denoising loss (ε-prediction).
 
         Args:
-            batch: dict with keys obs_images, obs_proprio, action, morph_vec
+            batch: dict with keys obs_images, obs_proprio, action, morph_vec, task_id
 
         Returns:
             Scalar MSE loss.
         """
         obs_embed = self.obs_encoder(batch["obs_images"], batch["obs_proprio"])
-        morph_embed = self.morph_encoder(batch["morph_vec"])
+        morph_cond = self._get_morph_cond(batch["morph_vec"], batch.get("task_id"))
 
         # (B, horizon, action_dim) → (B, action_dim, horizon) for Conv1D
         action = batch["action"].permute(0, 2, 1)
@@ -117,7 +154,7 @@ class MorphologyConditionedDP(nn.Module):
         ).long()
 
         noisy_action = self.noise_scheduler.add_noise(action, noise, timesteps)
-        noise_pred = self.noise_net(noisy_action, timesteps, obs_embed, morph_embed)
+        noise_pred = self.noise_net(noisy_action, timesteps, obs_embed, morph_cond)
 
         return F.mse_loss(noise_pred, noise)
 
@@ -130,15 +167,22 @@ class MorphologyConditionedDP(nn.Module):
         obs_images: torch.Tensor,
         obs_proprio: torch.Tensor,
         morph_vec: torch.Tensor,
+        task_id: torch.Tensor | None = None,
     ) -> torch.Tensor:
         """
         Generate an action chunk via DDIM denoising.
+
+        Args:
+            obs_images: (B, obs_horizon, 3, H, W)
+            obs_proprio: (B, obs_horizon, proprio_dim)
+            morph_vec: (B, morph_feature_dim)
+            task_id: (B,) long tensor — which task to perform
 
         Returns:
             actions: (B, execute_horizon, action_dim)
         """
         obs_embed = self.obs_encoder(obs_images, obs_proprio)
-        morph_embed = self.morph_encoder(morph_vec)
+        morph_cond = self._get_morph_cond(morph_vec, task_id)
         B = obs_embed.shape[0]
 
         scheduler = DDIMScheduler(**self._inference_scheduler_cfg)
@@ -150,7 +194,7 @@ class MorphologyConditionedDP(nn.Module):
 
         for t in scheduler.timesteps:
             t_batch = t.unsqueeze(0).expand(B)
-            noise_pred = self.noise_net(action, t_batch, obs_embed, morph_embed)
+            noise_pred = self.noise_net(action, t_batch, obs_embed, morph_cond)
             action = scheduler.step(noise_pred, t, action).prev_sample
 
         # (B, action_dim, horizon) → (B, horizon, action_dim), take first k
