@@ -1,0 +1,612 @@
+/* ==========================================================================
+   Horizon Clarity — One Policy, Any Body
+   Distill-inspired academic site. Zero build, pure CSS.
+   ========================================================================== */
+
+:root {
+    /* Colors */
+    --bg: #ffffff;
+    --bg-alt: #f8f9fa;
+    --text: #1a1a2e;
+    --text-muted: #555;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --border: #e2e8f0;
+    --card-bg: #ffffff;
+    --code-bg: #f1f5f9;
+    --quote-border: #2563eb;
+    --clarity-bg: #eff6ff;
+
+    /* Typography */
+    --font-body: 'Georgia', 'Times New Roman', serif;
+    --font-heading: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+
+    /* Layout */
+    --max-width: 780px;
+    --side-margin: 2rem;
+}
+
+/* ==========================================================================
+   Base
+   ========================================================================== */
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: var(--font-body);
+    color: var(--text);
+    background: var(--bg);
+    line-height: 1.75;
+    margin: 0;
+    padding: 0;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    line-height: 1.3;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+}
+
+h1 { font-size: 2.5rem; }
+h2 { font-size: 1.75rem; border-bottom: 1px solid var(--border); padding-bottom: 0.5rem; }
+h3 { font-size: 1.35rem; }
+h4 { font-size: 1.1rem; color: var(--text-muted); }
+
+p {
+    margin: 1rem 0;
+}
+
+a {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+    color: var(--accent-hover);
+}
+
+blockquote {
+    border-left: 4px solid var(--quote-border);
+    margin: 1.5rem 0;
+    padding: 1rem 1.5rem;
+    background: var(--clarity-bg);
+    font-style: italic;
+    font-size: 1.1rem;
+}
+
+code {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    background: var(--code-bg);
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+}
+
+pre {
+    background: var(--code-bg);
+    padding: 1.25rem;
+    border-radius: 8px;
+    overflow-x: auto;
+    font-size: 0.85rem;
+    line-height: 1.5;
+}
+
+pre code {
+    background: none;
+    padding: 0;
+}
+
+/* ==========================================================================
+   Layout
+   ========================================================================== */
+
+.container {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2rem var(--side-margin);
+}
+
+/* ==========================================================================
+   Top Navigation
+   ========================================================================== */
+
+.topnav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.75rem 2rem;
+    background: var(--bg-alt);
+    border-bottom: 1px solid var(--border);
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    backdrop-filter: blur(8px);
+}
+
+.topnav a {
+    color: var(--text-muted);
+    font-weight: 500;
+}
+
+.topnav a:hover {
+    color: var(--accent);
+    text-decoration: none;
+}
+
+.topnav-title {
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.01em;
+}
+
+/* ==========================================================================
+   Article Navigation (prev/next)
+   ========================================================================== */
+
+.article-nav {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 4rem;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+}
+
+/* ==========================================================================
+   Hero
+   ========================================================================== */
+
+.hero {
+    background: linear-gradient(135deg, #1e3a5f 0%, #2563eb 50%, #3b82f6 100%);
+    color: white;
+    padding: 5rem 2rem;
+    text-align: center;
+}
+
+.hero-content {
+    max-width: 700px;
+    margin: 0 auto;
+}
+
+.hero-title {
+    font-size: 3rem;
+    font-weight: 800;
+    margin: 0 0 0.5rem 0;
+    letter-spacing: -0.02em;
+}
+
+.hero-subtitle {
+    font-size: 1.15rem;
+    opacity: 0.9;
+    margin: 0.5rem 0;
+    font-family: var(--font-heading);
+}
+
+.hero-tagline {
+    font-size: 1rem;
+    opacity: 0.75;
+    margin-top: 1rem;
+}
+
+.hero-links {
+    margin-top: 2rem;
+    display: flex;
+    gap: 1rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.btn {
+    display: inline-block;
+    padding: 0.6rem 1.4rem;
+    border: 2px solid rgba(255,255,255,0.6);
+    border-radius: 6px;
+    color: white;
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+    font-weight: 600;
+    transition: all 0.2s;
+}
+
+.btn:hover {
+    background: rgba(255,255,255,0.15);
+    border-color: white;
+    text-decoration: none;
+}
+
+.btn-primary {
+    background: white;
+    color: var(--accent);
+    border-color: white;
+}
+
+.btn-primary:hover {
+    background: #f0f0f0;
+    color: var(--accent-hover);
+}
+
+/* ==========================================================================
+   Intro / Grand Clarity
+   ========================================================================== */
+
+.intro {
+    margin-top: 3rem;
+}
+
+.clarity-quote {
+    font-size: 1.3rem;
+    font-weight: 500;
+    text-align: center;
+    border-left: none;
+    border: 2px solid var(--accent);
+    border-radius: 8px;
+    background: var(--clarity-bg);
+}
+
+/* ==========================================================================
+   Theory Grid
+   ========================================================================== */
+
+.roadmap {
+    margin-top: 3rem;
+}
+
+.theory-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-top: 1.5rem;
+}
+
+.theory-card {
+    display: block;
+    background: var(--card-bg);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 1.5rem;
+    transition: all 0.2s ease;
+    text-decoration: none;
+    color: var(--text);
+}
+
+.theory-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.08);
+    border-color: var(--accent);
+    text-decoration: none;
+}
+
+.card-week {
+    display: inline-block;
+    font-family: var(--font-heading);
+    font-size: 0.75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--accent);
+    margin-bottom: 0.5rem;
+}
+
+.theory-card h3 {
+    margin: 0.25rem 0 0.5rem 0;
+    font-size: 1.2rem;
+}
+
+.card-clarity {
+    font-size: 0.95rem;
+    color: var(--accent);
+    margin: 0 0 0.5rem 0;
+}
+
+.theory-card p:last-child {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    margin: 0;
+}
+
+/* ==========================================================================
+   Architecture
+   ========================================================================== */
+
+.architecture {
+    margin-top: 3rem;
+}
+
+.arch-equation {
+    text-align: center;
+    margin: 2rem 0;
+    padding: 1.5rem;
+    background: var(--bg-alt);
+    border-radius: 8px;
+    overflow-x: auto;
+}
+
+.arch-description {
+    text-align: center;
+    color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Results
+   ========================================================================== */
+
+.results-preview {
+    margin-top: 3rem;
+}
+
+.results-table-wrapper {
+    overflow-x: auto;
+}
+
+.results-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: var(--font-heading);
+    font-size: 0.9rem;
+}
+
+.results-table th {
+    background: var(--bg-alt);
+    padding: 0.75rem 1rem;
+    text-align: left;
+    font-weight: 600;
+    border-bottom: 2px solid var(--border);
+}
+
+.results-table td {
+    padding: 0.6rem 1rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.results-table tr:hover td {
+    background: var(--clarity-bg);
+}
+
+.results-note {
+    font-size: 0.85rem;
+    color: var(--text-muted);
+    font-style: italic;
+    margin-top: 1rem;
+}
+
+/* ==========================================================================
+   Theory Article Layout (for theory pages)
+   ========================================================================== */
+
+.article {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 2rem var(--side-margin);
+}
+
+.article-header {
+    margin-bottom: 3rem;
+    padding-bottom: 1.5rem;
+    border-bottom: 1px solid var(--border);
+}
+
+.article-header h1 {
+    font-size: 2.2rem;
+    margin-bottom: 0.5rem;
+}
+
+.article-meta {
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* Sidebar navigation for theory pages */
+.page-with-sidebar {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 3rem;
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 2rem;
+}
+
+.sidebar {
+    position: sticky;
+    top: 2rem;
+    align-self: start;
+    max-height: calc(100vh - 4rem);
+    overflow-y: auto;
+    padding-right: 1rem;
+}
+
+.sidebar nav {
+    font-family: var(--font-heading);
+    font-size: 0.8rem;
+}
+
+.sidebar ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sidebar li {
+    margin: 0.3rem 0;
+}
+
+.sidebar a {
+    color: var(--text-muted);
+    display: block;
+    padding: 0.25rem 0.5rem;
+    border-left: 2px solid transparent;
+    border-radius: 2px;
+    transition: all 0.15s;
+}
+
+.sidebar a:hover,
+.sidebar a.active {
+    color: var(--accent);
+    border-left-color: var(--accent);
+    background: var(--clarity-bg);
+    text-decoration: none;
+}
+
+.sidebar .section-title {
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    margin-top: 1rem;
+    margin-bottom: 0.3rem;
+    padding-left: 0.5rem;
+}
+
+.sidebar .subsection {
+    padding-left: 1rem;
+}
+
+/* ==========================================================================
+   Derivation blocks
+   ========================================================================== */
+
+.derivation {
+    background: var(--bg-alt);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin: 1.5rem 0;
+}
+
+.derivation-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: var(--accent);
+    margin-bottom: 1rem;
+}
+
+/* Collapsible sections */
+details {
+    margin: 1rem 0;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+}
+
+details[open] {
+    background: var(--bg-alt);
+}
+
+summary {
+    cursor: pointer;
+    font-family: var(--font-heading);
+    font-weight: 600;
+    font-size: 0.95rem;
+    color: var(--accent);
+}
+
+summary:hover {
+    color: var(--accent-hover);
+}
+
+/* Margin notes */
+.margin-note {
+    float: right;
+    clear: right;
+    width: 200px;
+    margin-right: -240px;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+}
+
+/* Key insight callouts */
+.insight {
+    border-left: 4px solid #10b981;
+    background: #ecfdf5;
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+.insight-title {
+    font-family: var(--font-heading);
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    color: #059669;
+    margin-bottom: 0.5rem;
+}
+
+/* Warning/caveat blocks */
+.caveat {
+    border-left: 4px solid #f59e0b;
+    background: #fffbeb;
+    padding: 1rem 1.5rem;
+    margin: 1.5rem 0;
+    border-radius: 0 8px 8px 0;
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.site-footer {
+    text-align: center;
+    padding: 3rem 2rem;
+    margin-top: 4rem;
+    border-top: 1px solid var(--border);
+    font-family: var(--font-heading);
+    font-size: 0.85rem;
+    color: var(--text-muted);
+}
+
+/* ==========================================================================
+   Responsive
+   ========================================================================== */
+
+@media (max-width: 900px) {
+    .page-with-sidebar {
+        grid-template-columns: 1fr;
+    }
+    .sidebar {
+        position: static;
+        max-height: none;
+        border-bottom: 1px solid var(--border);
+        padding-bottom: 1rem;
+        margin-bottom: 2rem;
+    }
+    .margin-note {
+        float: none;
+        width: auto;
+        margin: 1rem 0;
+        padding: 0.5rem 1rem;
+        border-left: 2px solid var(--border);
+    }
+}
+
+@media (max-width: 600px) {
+    .hero-title { font-size: 2rem; }
+    .hero { padding: 3rem 1.5rem; }
+    .theory-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 1.8rem; }
+    h2 { font-size: 1.4rem; }
+}

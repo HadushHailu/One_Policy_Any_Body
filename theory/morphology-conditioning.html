@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Morphology Conditioning — Horizon Clarity</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+</head>
+<body>
+    <nav class="topnav">
+        <a href="../">← Home</a>
+        <span class="topnav-title">Horizon Clarity</span>
+        <a href="index.html">All Theory</a>
+    </nav>
+
+    <div class="page-with-sidebar">
+        <aside class="sidebar">
+            <nav>
+                <p class="section-title">Morphology Conditioning</p>
+                <ul>
+                    <li><a href="#horizon-clarity">Horizon Clarity</a></li>
+                    <li><a href="#problem">The Problem</a></li>
+                    <li><a href="#morph-vector">The Morphology Vector</a></li>
+                    <li><a href="#film">FiLM Conditioning</a></li>
+                    <li><a href="#why-film">Why FiLM Works</a></li>
+                </ul>
+                <p class="section-title">Domain Randomization</p>
+                <ul>
+                    <li><a href="#dr-intuition">The DR Intuition</a></li>
+                    <li><a href="#what-to-randomize">What to Randomize</a></li>
+                    <li><a href="#sim-to-real">Sim-to-Real Gap</a></li>
+                </ul>
+                <p class="section-title">Implementation</p>
+                <ul>
+                    <li><a href="#encoder-arch">Encoder Architecture</a></li>
+                    <li><a href="#robot-configs">Robot Configurations</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <article class="article">
+            <header class="article-header">
+                <span class="card-week">Week 3</span>
+                <h1>Morphology Conditioning</h1>
+                <p class="article-meta">How to control any robot with a single neural network</p>
+            </header>
+
+            <section id="horizon-clarity">
+                <h2>Horizon Clarity</h2>
+                <blockquote class="clarity-quote">
+                    Body is a vector — encode any robot's physical structure as a descriptor, condition the policy on it, control any body.
+                </blockquote>
+            </section>
+
+            <section id="problem">
+                <h2>The Problem</h2>
+                <p>
+                    A Franka has 7 joints, reaches 0.855m, and weighs 18kg.
+                    A UR5 has 6 joints, reaches 0.85m, and weighs 18.4kg.
+                    An SO-101 has 6 joints, reaches 0.3m, and weighs 1.2kg.
+                </p>
+                <p>
+                    They're all arms trying to pick up objects. The <em>task</em> is the same.
+                    The <em>physical realization</em> is different. How do you train <strong>one</strong>
+                    network to control all of them?
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">The naive approaches and why they fail</p>
+                    <p><strong>Approach 1: Train separate networks.</strong> Works but doesn't transfer. A Franka network has never seen UR5 data → can't generalize.</p>
+                    <p><strong>Approach 2: Concatenate robot ID.</strong> One-hot encoding of robot type. Works for seen robots but semantically meaningless → can't interpolate to new robots.</p>
+                    <p><strong>Approach 3: Morphology descriptor (ours).</strong> A continuous vector describing the robot's body. Semantically meaningful → can generalize to unseen morphologies by interpolation in descriptor space.</p>
+                </div>
+            </section>
+
+            <section id="morph-vector">
+                <h2>The Morphology Vector</h2>
+                <p>Each robot is described by a fixed-size vector $m \in \mathbb{R}^{46}$ containing:</p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Morphology descriptor components</p>
+                    <table class="results-table">
+                        <thead><tr><th>Component</th><th>Dimensions</th><th>What it encodes</th></tr></thead>
+                        <tbody>
+                            <tr><td>Link lengths</td><td>7</td><td>Distance between consecutive joints</td></tr>
+                            <tr><td>Link masses</td><td>7</td><td>Mass of each link</td></tr>
+                            <tr><td>Joint positions (lower)</td><td>7</td><td>Lower joint limits</td></tr>
+                            <tr><td>Joint positions (upper)</td><td>7</td><td>Upper joint limits</td></tr>
+                            <tr><td>Torque limits</td><td>7</td><td>Maximum torque per joint</td></tr>
+                            <tr><td>EE offset</td><td>3</td><td>End-effector position relative to last joint</td></tr>
+                            <tr><td>Kinematic type</td><td>7</td><td>Joint types (revolute, prismatic, etc.)</td></tr>
+                            <tr><td>Padding</td><td>1</td><td>Alignment</td></tr>
+                        </tbody>
+                    </table>
+                    <p>Robots with fewer than 7 joints are zero-padded. All values are normalized to $[0, 1]$.</p>
+                </div>
+
+                <div class="insight">
+                    <p class="insight-title">Why continuous > discrete</p>
+                    <p>
+                        A one-hot ID is discrete — robot A is either exactly robot A or not.
+                        A morphology vector is continuous — a robot with 0.5m reach is
+                        <em>between</em> one with 0.3m and one with 0.85m in descriptor space.
+                        The network can interpolate.
+                    </p>
+                </div>
+            </section>
+
+            <section id="film">
+                <h2>FiLM Conditioning</h2>
+                <p>
+                    Feature-wise Linear Modulation (Perez et al., 2018) is how morphology
+                    information enters the network. Instead of naively concatenating the
+                    morphology vector to the input, FiLM <em>modulates</em> internal features:
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">FiLM derivation</p>
+                    <p>Given a feature map $h \in \mathbb{R}^C$ (a channel of the U-Net) and morphology embedding $m$:</p>
+                    $$\text{FiLM}(h, m) = \gamma(m) \odot h + \beta(m)$$
+                    <p>where:</p>
+                    <ul>
+                        <li>$\gamma(m) = W_\gamma m + b_\gamma$ — learned per-channel <strong>scale</strong></li>
+                        <li>$\beta(m) = W_\beta m + b_\beta$ — learned per-channel <strong>shift</strong></li>
+                        <li>$\odot$ — element-wise multiplication</li>
+                    </ul>
+                    <p><strong>Interpretation:</strong> Morphology doesn't just add a bias — it controls the <em>gain</em> of every feature channel. It can amplify features relevant to a large arm and suppress those relevant to a small arm.</p>
+                </div>
+            </section>
+
+            <section id="why-film">
+                <h2>Why FiLM Over Concatenation?</h2>
+
+                <div class="derivation">
+                    <p class="derivation-title">Information-theoretic argument</p>
+                    <p><strong>Concatenation:</strong> $h' = [h; m]$. The network must learn to route information from $m$ through all subsequent layers. If $m$ is 64-dim and $h$ is 256-dim, morphology is 20% of the signal — easily dominated by observations.</p>
+                    <p><strong>FiLM:</strong> $h' = \gamma(m) \odot h + \beta(m)$. Morphology directly modulates <em>every</em> feature channel with independent scale and shift. It has a multiplicative effect — even small $m$ changes can dramatically alter the feature landscape.</p>
+                    <p><strong>Analogy:</strong> Concatenation is like whispering in a crowd. FiLM is like having the volume knob for every microphone in the room.</p>
+                </div>
+            </section>
+
+            <section id="dr-intuition">
+                <h2>Domain Randomization — The Intuition</h2>
+                <blockquote>
+                    If you've seen enough variation in training, reality is just another sample from the distribution.
+                </blockquote>
+                <p>
+                    During training, randomly vary physics parameters (mass, friction, damping)
+                    within plausible ranges. The policy learns to handle all variations.
+                    When deployed on a real robot (with unknown exact physics), it generalizes
+                    because reality falls within the trained distribution.
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Formal view</p>
+                    <p>Define the simulation parameter space $\xi \in \Xi$. Standard training uses a fixed $\xi_0$:</p>
+                    $$\pi^* = \arg\min_\pi \mathbb{E}_{\tau \sim \text{Env}(\xi_0)}[\mathcal{L}(\pi, \tau)]$$
+                    <p>Domain randomization optimizes over a <em>distribution</em> of environments:</p>
+                    $$\pi^*_{\text{DR}} = \arg\min_\pi \mathbb{E}_{\xi \sim P(\Xi)}\mathbb{E}_{\tau \sim \text{Env}(\xi)}[\mathcal{L}(\pi, \tau)]$$
+                    <p>If reality $\xi_\text{real} \in \text{support}(P(\Xi))$, the policy generalizes.</p>
+                </div>
+            </section>
+
+            <section id="what-to-randomize">
+                <h2>What to Randomize</h2>
+                <table class="results-table">
+                    <thead><tr><th>Parameter</th><th>Range</th><th>Effect</th></tr></thead>
+                    <tbody>
+                        <tr><td>Object mass</td><td>±30%</td><td>Gripper force robustness</td></tr>
+                        <tr><td>Friction</td><td>±50%</td><td>Grasp stability</td></tr>
+                        <tr><td>Damping</td><td>±20%</td><td>Motion smoothness</td></tr>
+                        <tr><td>Camera position</td><td>±2cm, ±5°</td><td>Visual robustness</td></tr>
+                        <tr><td>Lighting</td><td>±40% intensity</td><td>Perception robustness</td></tr>
+                        <tr><td>Object size</td><td>±15%</td><td>Grasp generalization</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section id="sim-to-real">
+                <h2>The Sim-to-Real Gap</h2>
+                <div class="caveat">
+                    <p><strong>DR is necessary but not sufficient.</strong> Some physics effects
+                    (deformable objects, contact dynamics, sensor noise patterns) are hard
+                    to randomize faithfully. The gap remains — DR narrows it, fine-tuning (Week 7) closes it.</p>
+                </div>
+            </section>
+
+            <section id="encoder-arch">
+                <h2>Morphology Encoder Architecture</h2>
+                <pre><code class="language-python">class MorphologyEncoder(nn.Module):
+    """
+    morph_vec (B, 46) → morph_embed (B, 32)
+    Simple MLP with residual connection.
+    """
+    def __init__(self, input_dim=46, output_dim=32, hidden_dim=128):
+        self.net = nn.Sequential(
+            nn.Linear(input_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, output_dim),
+        )
+
+    def forward(self, morph_vec):
+        return self.net(morph_vec)  # (B, 32)</code></pre>
+                <p>
+                    The encoder compresses the 46-dim descriptor into a 32-dim embedding.
+                    This embedding is then concatenated with the task embedding (32-dim) to form
+                    the 64-dim morphology conditioning vector used by FiLM.
+                </p>
+            </section>
+
+            <section id="robot-configs">
+                <h2>Robot Configurations</h2>
+                <table class="results-table">
+                    <thead><tr><th>Robot</th><th>DOF</th><th>Reach</th><th>Action Dim</th><th>Key Difference</th></tr></thead>
+                    <tbody>
+                        <tr><td>Franka Panda</td><td>7</td><td>0.855m</td><td>4 (EE pos + grip)</td><td>Redundant DOF, high precision</td></tr>
+                        <tr><td>UR5</td><td>6</td><td>0.85m</td><td>4 (EE pos + grip)</td><td>Industrial, high payload</td></tr>
+                        <tr><td>SO-101</td><td>6</td><td>0.3m</td><td>4 (EE pos + grip)</td><td>Small, lightweight, low-cost</td></tr>
+                    </tbody>
+                </table>
+                <p>
+                    All robots use the same 4-dim action space (end-effector Δposition + gripper).
+                    The morphology conditioning tells the policy <em>how</em> to realize these
+                    EE commands given the specific body's capabilities.
+                </p>
+            </section>
+
+            <nav class="article-nav">
+                <a href="diffusion-policy.html">← Diffusion Policy</a>
+                <a href="task-conditioning.html">Next: Task Conditioning →</a>
+            </nav>
+        </article>
+    </div>
+
+    <footer class="site-footer">
+        <p>Horizon Clarity — One Policy, Any Body</p>
+    </footer>
+</body>
+</html>

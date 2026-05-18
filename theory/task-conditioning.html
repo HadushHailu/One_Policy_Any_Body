@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Task Conditioning — Horizon Clarity</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+</head>
+<body>
+    <nav class="topnav">
+        <a href="../">← Home</a>
+        <span class="topnav-title">Horizon Clarity</span>
+        <a href="index.html">All Theory</a>
+    </nav>
+
+    <div class="page-with-sidebar">
+        <aside class="sidebar">
+            <nav>
+                <p class="section-title">Task Conditioning</p>
+                <ul>
+                    <li><a href="#horizon-clarity">Horizon Clarity</a></li>
+                    <li><a href="#problem">Mode Collapse Problem</a></li>
+                    <li><a href="#task-embedding">Task Embedding</a></li>
+                    <li><a href="#combined-conditioning">Combined Conditioning</a></li>
+                </ul>
+                <p class="section-title">Temporal Ensemble</p>
+                <ul>
+                    <li><a href="#chunk-boundaries">Chunk Boundary Problem</a></li>
+                    <li><a href="#ensemble-math">Ensemble Mathematics</a></li>
+                    <li><a href="#decay-analysis">Decay Analysis</a></li>
+                </ul>
+                <p class="section-title">Results</p>
+                <ul>
+                    <li><a href="#without-vs-with">Without vs With</a></li>
+                    <li><a href="#training-curves">Training Curves</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <article class="article">
+            <header class="article-header">
+                <span class="card-week">Week 4</span>
+                <h1>Task Conditioning & Temporal Ensemble</h1>
+                <p class="article-meta">Multi-task disambiguation and smooth action generation</p>
+            </header>
+
+            <section id="horizon-clarity">
+                <h2>Horizon Clarity</h2>
+                <blockquote class="clarity-quote">
+                    Tasks need names — without an explicit signal, multi-task policies collapse to the average of incompatible behaviors.
+                </blockquote>
+            </section>
+
+            <section id="problem">
+                <h2>The Mode Collapse Problem</h2>
+                <p>
+                    Consider training a single policy on two tasks: <em>pick & place</em>
+                    (move object to zone A) and <em>stack</em> (place object on top of another).
+                    After grasping, the policy must decide: move to zone A, or to the other cube?
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Why averaging destroys performance</p>
+                    <p>Let $a_\text{pick}$ = move-to-zone-A and $a_\text{stack}$ = move-to-other-cube. Without task signal:</p>
+                    $$\pi(a \mid o) = \frac{1}{2}\pi_\text{pick}(a \mid o) + \frac{1}{2}\pi_\text{stack}(a \mid o)$$
+                    <p>A regression-based policy outputs the expected action:</p>
+                    $$\mathbb{E}[a] = \frac{a_\text{pick} + a_\text{stack}}{2}$$
+                    <p>This midpoint action moves to <strong>neither</strong> target — between zone A and the other cube. 0% success on both tasks.</p>
+
+                    <p><strong>"But diffusion handles multimodality!"</strong> — true, it picks one mode per rollout. But which mode? It's random. You get 50% pick, 50% stack, regardless of what the user wants. That's not controllable multi-task learning.</p>
+                </div>
+            </section>
+
+            <section id="task-embedding">
+                <h2>The Task Embedding</h2>
+                <p>
+                    The fix is simple: give the policy an explicit task ID $k \in \{0, 1, \ldots, K-1\}$
+                    and learn a task-specific embedding:
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Task encoder</p>
+                    $$\text{task\_emb}(k) = E_k \in \mathbb{R}^{32}$$
+                    <p>where $E \in \mathbb{R}^{K \times 32}$ is a learnable embedding matrix (just like word embeddings in NLP).</p>
+
+                    <pre><code class="language-python">class TaskEncoder(nn.Module):
+    def __init__(self, n_tasks=2, embed_dim=32):
+        super().__init__()
+        self.embedding = nn.Embedding(n_tasks, embed_dim)
+
+    def forward(self, task_id):
+        # task_id: (B,) long tensor
+        return self.embedding(task_id)  # (B, 32)</code></pre>
+
+                    <p>
+                        The embedding is <em>learned</em> — the network discovers what
+                        "pick" and "stack" mean in terms of the action space differences.
+                        No manual encoding needed.
+                    </p>
+                </div>
+            </section>
+
+            <section id="combined-conditioning">
+                <h2>Combined Conditioning Vector</h2>
+                <p>
+                    The full conditioning for the U-Net combines morphology and task:
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Conditioning architecture</p>
+                    $$\text{morph\_cond} = [\text{morph\_encoder}(m) \;\|\; \text{task\_encoder}(k)] \in \mathbb{R}^{64}$$
+                    <p>This 64-dim vector enters FiLM at every U-Net layer:</p>
+                    $$\text{FiLM}(h, \text{morph\_cond}) = \gamma(\text{morph\_cond}) \odot h + \beta(\text{morph\_cond})$$
+
+                    <p><strong>The full conditioning stack:</strong></p>
+                    $$\epsilon_\theta(x_t, t, o, m, k) = \text{UNet}\big(x_t,\; \underbrace{\text{timestep}(t) + \text{obs}(o)}_{\text{global cond}},\; \underbrace{[\text{morph}(m) \| \text{task}(k)]}_{\text{FiLM cond}}\big)$$
+                </div>
+
+                <div class="insight">
+                    <p class="insight-title">Information flow</p>
+                    <p>
+                        Observation tells the policy <em>what it sees</em>.<br>
+                        Morphology tells it <em>what body it has</em>.<br>
+                        Task tells it <em>what to do</em>.<br>
+                        Together, they uniquely determine the action.
+                    </p>
+                </div>
+            </section>
+
+            <section id="chunk-boundaries">
+                <h2>The Chunk Boundary Problem</h2>
+                <p>
+                    Recall receding-horizon control: execute $k=8$ actions, then re-plan.
+                    At the boundary between chunks, the last action of chunk $n$ and the
+                    first action of chunk $n+1$ are generated by <em>different</em> forward passes.
+                    They can be inconsistent — causing jitter.
+                </p>
+                <div class="caveat">
+                    <p><strong>Symptom:</strong> The robot's end-effector makes small jerky
+                    adjustments every 8 timesteps. Visible as periodic "hiccups" in otherwise
+                    smooth trajectories.</p>
+                </div>
+            </section>
+
+            <section id="ensemble-math">
+                <h2>Temporal Ensemble — The Mathematics</h2>
+                <p>
+                    The solution: when chunks overlap in time, <strong>average</strong> their
+                    predictions with exponential decay weighting.
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Ensemble formulation</p>
+                    <p>At timestep $t$, multiple chunks may have predictions. Chunk $i$ started at step $s_i$ and predicted:</p>
+                    $$a_t^{(i)} = \text{chunk}_i[t - s_i]$$
+                    <p>The weight for chunk $i$'s prediction at time $t$:</p>
+                    $$w_i = \exp(-\lambda \cdot (t - s_i))$$
+                    <p>where $\lambda$ is the decay rate. Lower $\lambda$ = more smoothing.</p>
+                    <p>The ensembled action:</p>
+                    $$a_t = \frac{\sum_i w_i \cdot a_t^{(i)}}{\sum_i w_i}$$
+                </div>
+
+                <div class="insight">
+                    <p class="insight-title">Intuition</p>
+                    <p>
+                        Recent predictions (low $t - s_i$) get high weight because they were
+                        conditioned on more recent observations. Old predictions (high $t - s_i$)
+                        fade away — they were based on stale information.
+                    </p>
+                </div>
+            </section>
+
+            <section id="decay-analysis">
+                <h2>Decay Rate Analysis</h2>
+                <table class="results-table">
+                    <thead><tr><th>$\lambda$</th><th>Behavior</th><th>Use case</th></tr></thead>
+                    <tbody>
+                        <tr><td>0</td><td>Equal weight (simple averaging)</td><td>Maximum smoothing</td></tr>
+                        <tr><td>0.01</td><td>Gentle decay over ~100 steps</td><td>Typical for 10Hz control</td></tr>
+                        <tr><td>0.1</td><td>Fast decay, recent chunks dominate</td><td>Dynamic environments</td></tr>
+                        <tr><td>1.0</td><td>Only latest chunk matters</td><td>Equivalent to no ensemble</td></tr>
+                    </tbody>
+                </table>
+                <p>We use $\lambda = 0.01$ — smooth enough to eliminate jitter but responsive enough to track changing targets.</p>
+            </section>
+
+            <section id="without-vs-with">
+                <h2>Without vs With Task Conditioning</h2>
+                <table class="results-table">
+                    <thead><tr><th>Configuration</th><th>Pick Success</th><th>Stack Success</th><th>Controllable?</th></tr></thead>
+                    <tbody>
+                        <tr><td>Week 3 (no task cond.)</td><td>25–30%</td><td>5–10%</td><td>No — random task each rollout</td></tr>
+                        <tr><td>Week 4 (task cond.)</td><td><em>training...</em></td><td><em>training...</em></td><td>Yes — specify at inference</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <section id="training-curves">
+                <h2>Training Curves</h2>
+                <p>
+                    Week 4 model (52.7M params, 300 epochs) shows faster convergence than
+                    Week 3 (52.5M params, 200 epochs) because the task embedding reduces
+                    the effective difficulty — the network doesn't need to figure out which
+                    task from context alone.
+                </p>
+                <table class="results-table">
+                    <thead><tr><th>Epoch</th><th>Week 3 Loss</th><th>Week 4 Loss</th></tr></thead>
+                    <tbody>
+                        <tr><td>0</td><td>0.1024</td><td>0.1025</td></tr>
+                        <tr><td>50</td><td>0.0088</td><td>—</td></tr>
+                        <tr><td>100</td><td>0.0053</td><td>—</td></tr>
+                        <tr><td>150</td><td>0.0029</td><td>—</td></tr>
+                        <tr><td>200</td><td>0.0021</td><td>—</td></tr>
+                        <tr><td>300</td><td>—</td><td><em>training...</em></td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <nav class="article-nav">
+                <a href="morphology-conditioning.html">← Morphology Conditioning</a>
+                <a href="data-scaling.html">Next: Data Scaling →</a>
+            </nav>
+        </article>
+    </div>
+
+    <footer class="site-footer">
+        <p>Horizon Clarity — One Policy, Any Body</p>
+    </footer>
+</body>
+</html>

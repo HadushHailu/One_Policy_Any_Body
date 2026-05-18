@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>One Policy, Any Body — Horizon Clarity</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+</head>
+<body>
+    <!-- Hero Section -->
+    <header class="hero">
+        <div class="hero-content">
+            <h1 class="hero-title">One Policy, Any Body</h1>
+            <p class="hero-subtitle">Cross-Embodiment Robot Policy Learning via Morphology-Conditioned Diffusion</p>
+            <p class="hero-tagline"><em>Horizon Clarity</em> — First-Principles Foundations of Embodiment-Agnostic Control</p>
+            <nav class="hero-links">
+                <a href="https://github.com/hadush/One_Policy_Any_Body" class="btn">Code</a>
+                <a href="paper/" class="btn">Paper</a>
+                <a href="theory/" class="btn btn-primary">Theory</a>
+                <a href="results/" class="btn">Results</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Grand Horizon Clarity -->
+    <main class="container">
+        <section class="intro">
+            <h2>The Grand Horizon Clarity</h2>
+            <blockquote class="clarity-quote">
+                Shared behavior structure + body-specific modulation = one policy, any body.
+            </blockquote>
+            <p>
+                All robots perform the same <em>semantic</em> actions — reach, grasp, place.
+                What differs is the <em>physical realization</em>: which joints to activate,
+                how much torque to apply, how far to extend. A single neural policy can
+                learn the shared structure, while a morphology embedding tells it <em>how</em>
+                to instantiate that structure for any specific body.
+            </p>
+        </section>
+
+        <!-- Theory Roadmap -->
+        <section class="roadmap">
+            <h2>Horizon Clarity — Theory Roadmap</h2>
+            <p>Each section distills the first-principle truth. The 80% that constitutes the fundamental, sun-setting clarity.</p>
+
+            <div class="theory-grid">
+                <a href="theory/diffusion-policy.html" class="theory-card">
+                    <span class="card-week">Week 1–2</span>
+                    <h3>Diffusion Policy</h3>
+                    <p class="card-clarity"><em>"Denoising is learning"</em></p>
+                    <p>Corrupt action sequences with noise, learn to reverse the corruption. Multimodal distributions emerge naturally.</p>
+                </a>
+
+                <a href="theory/morphology-conditioning.html" class="theory-card">
+                    <span class="card-week">Week 3</span>
+                    <h3>Morphology Conditioning</h3>
+                    <p class="card-clarity"><em>"Body is a vector"</em></p>
+                    <p>Encode any robot's physical structure as a descriptor. Condition the policy via FiLM — one network, infinite bodies.</p>
+                </a>
+
+                <a href="theory/task-conditioning.html" class="theory-card">
+                    <span class="card-week">Week 4</span>
+                    <h3>Task Conditioning</h3>
+                    <p class="card-clarity"><em>"Tasks need names"</em></p>
+                    <p>Without explicit task signals, multi-task policies collapse to the average of incompatible behaviors.</p>
+                </a>
+
+                <a href="theory/data-scaling.html" class="theory-card">
+                    <span class="card-week">Week 5</span>
+                    <h3>Data Scaling</h3>
+                    <p class="card-clarity"><em>"Data is the policy"</em></p>
+                    <p>Imitation learning can only reproduce what it has seen. Coverage of the state space determines performance.</p>
+                </a>
+
+                <a href="theory/ablations.html" class="theory-card">
+                    <span class="card-week">Week 6</span>
+                    <h3>Ablation Science</h3>
+                    <p class="card-clarity"><em>"Prove by absence"</em></p>
+                    <p>Every architectural choice must earn its place. Remove it, measure the loss. The scientific method of deep learning.</p>
+                </a>
+
+                <a href="theory/transfer-learning.html" class="theory-card">
+                    <span class="card-week">Week 7–8</span>
+                    <h3>Transfer & Fine-tuning</h3>
+                    <p class="card-clarity"><em>"General then specific"</em></p>
+                    <p>Pre-train wide on many bodies, fine-tune narrow on the target. Prior + update = posterior.</p>
+                </a>
+            </div>
+        </section>
+
+        <!-- Architecture Overview -->
+        <section class="architecture">
+            <h2>Architecture at a Glance</h2>
+            <div class="arch-equation">
+                $$\pi_\theta(a_{1:H} \mid o_{1:T}, m, k) = \text{DDIM}^{-1}\big(\epsilon_\theta(x_t, t, \text{obs}(o), \text{morph}(m), \text{task}(k))\big)$$
+            </div>
+            <p class="arch-description">
+                A conditional denoising diffusion process generates action chunks,
+                conditioned on visual observations, proprioception, morphology descriptor,
+                and task embedding. The same 52.7M parameter network controls 3 distinct robots
+                across multiple manipulation tasks.
+            </p>
+        </section>
+
+        <!-- Key Results Preview -->
+        <section class="results-preview">
+            <h2>Key Results</h2>
+            <div class="results-table-wrapper">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>Robot</th>
+                            <th>Task</th>
+                            <th>Week 3 (no task cond.)</th>
+                            <th>Week 4 (task cond.)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Franka</td><td>Pick & Place</td><td>30%</td><td>—</td></tr>
+                        <tr><td>UR5</td><td>Pick & Place</td><td>25%</td><td>—</td></tr>
+                        <tr><td>SO-101</td><td>Pick & Place</td><td>25%</td><td>—</td></tr>
+                        <tr><td>Franka</td><td>Stack</td><td>5%</td><td>—</td></tr>
+                        <tr><td>UR5</td><td>Stack</td><td>10%</td><td>—</td></tr>
+                        <tr><td>SO-101</td><td>Stack</td><td>5%</td><td>—</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <p class="results-note">Week 4 results pending (training in progress — 300 epochs, ~16 hours).</p>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="site-footer">
+        <p>Horizon Clarity — One Policy, Any Body Project</p>
+        <p><a href="https://github.com/hadush/One_Policy_Any_Body">GitHub</a></p>
+    </footer>
+</body>
+</html>

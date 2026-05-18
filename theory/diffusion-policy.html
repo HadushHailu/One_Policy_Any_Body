@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diffusion Policy — Horizon Clarity</title>
+    <link rel="stylesheet" href="../css/style.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"
+        onload="hljs.highlightAll();"></script>
+</head>
+<body>
+    <nav class="topnav">
+        <a href="../">← Home</a>
+        <span class="topnav-title">Horizon Clarity</span>
+        <a href="index.html">All Theory</a>
+    </nav>
+
+    <div class="page-with-sidebar">
+        <!-- Sidebar TOC -->
+        <aside class="sidebar">
+            <nav>
+                <p class="section-title">Diffusion Policy</p>
+                <ul>
+                    <li><a href="#horizon-clarity">Horizon Clarity</a></li>
+                    <li><a href="#intuition">The Core Intuition</a></li>
+                    <li><a href="#forward-process">Forward Process</a></li>
+                    <li><a href="#reverse-process">Reverse Process</a></li>
+                    <li><a href="#training-objective">Training Objective</a></li>
+                    <li><a href="#ddpm-vs-ddim">DDPM vs DDIM</a></li>
+                </ul>
+                <p class="section-title">Action Space</p>
+                <ul>
+                    <li><a href="#why-actions">Why Diffusion for Actions?</a></li>
+                    <li><a href="#multimodality">Multimodality</a></li>
+                    <li><a href="#action-chunking">Action Chunking</a></li>
+                    <li><a href="#receding-horizon">Receding Horizon</a></li>
+                </ul>
+                <p class="section-title">Architecture</p>
+                <ul>
+                    <li><a href="#unet-backbone">1D U-Net Backbone</a></li>
+                    <li><a href="#conditioning">Observation Conditioning</a></li>
+                    <li><a href="#timestep-embedding">Timestep Embedding</a></li>
+                </ul>
+                <p class="section-title">Implementation</p>
+                <ul>
+                    <li><a href="#algorithm">Full Algorithm</a></li>
+                    <li><a href="#hyperparameters">Key Hyperparameters</a></li>
+                    <li><a href="#practical-tips">Practical Tips</a></li>
+                </ul>
+            </nav>
+        </aside>
+
+        <!-- Main Article -->
+        <article class="article">
+            <header class="article-header">
+                <span class="card-week">Week 1–2</span>
+                <h1>Diffusion Policy</h1>
+                <p class="article-meta">First-principles derivation of visuomotor policy learning via action diffusion</p>
+            </header>
+
+            <!-- ============================================================ -->
+            <section id="horizon-clarity">
+                <h2>Horizon Clarity</h2>
+                <blockquote class="clarity-quote">
+                    Denoising is learning — corrupt action sequences with noise, then train a neural net to reverse the corruption.
+                </blockquote>
+                <p>
+                    This is the sun-setting truth of diffusion policy. Everything else —
+                    the U-Net, the schedulers, the FiLM layers — is engineering.
+                    The fundamental insight is that by learning to <em>undo</em> a known
+                    corruption process, you implicitly learn the distribution of valid actions.
+                </p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="intuition">
+                <h2>The Core Intuition</h2>
+                <p>
+                    Imagine you have a collection of expert robot trajectories — sequences of
+                    joint positions that successfully pick up objects. These trajectories live
+                    in some complex, multimodal distribution. You want to <em>sample</em> from
+                    this distribution at test time.
+                </p>
+                <p>
+                    The diffusion approach: instead of learning the distribution directly
+                    (hard), learn how to <em>clean up</em> a noisy version of it (easy).
+                    Start from pure noise, and iteratively denoise until you have a valid
+                    action sequence.
+                </p>
+
+                <div class="insight">
+                    <p class="insight-title">Key Insight</p>
+                    <p>
+                        Noise → signal is equivalent to random → structured.
+                        Each denoising step adds a small amount of "structure" to the action
+                        sequence. After enough steps, random noise becomes a coherent manipulation trajectory.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="forward-process">
+                <h2>The Forward Process (Corruption)</h2>
+                <p>
+                    Given a clean action sequence $x_0$ from our expert demonstrations,
+                    the forward process progressively adds Gaussian noise over $T$ timesteps:
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Derivation: Forward Diffusion</p>
+                    <p>At each step $t$, add a small amount of noise:</p>
+                    $$q(x_t \mid x_{t-1}) = \mathcal{N}(x_t;\; \sqrt{1-\beta_t}\, x_{t-1},\; \beta_t I)$$
+
+                    <p>where $\beta_t$ is a variance schedule (small values, e.g. $\beta_1 = 10^{-4}$, $\beta_T = 0.02$).</p>
+
+                    <p><strong>The beautiful shortcut:</strong> We can jump directly to any timestep $t$ without iterating:</p>
+                    $$q(x_t \mid x_0) = \mathcal{N}(x_t;\; \sqrt{\bar\alpha_t}\, x_0,\; (1-\bar\alpha_t) I)$$
+
+                    <p>where $\alpha_t = 1 - \beta_t$ and $\bar\alpha_t = \prod_{s=1}^{t} \alpha_s$.</p>
+
+                    <p><strong>Reparameterization trick:</strong></p>
+                    $$x_t = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1-\bar\alpha_t}\, \epsilon, \quad \epsilon \sim \mathcal{N}(0, I)$$
+
+                    <p>As $t \to T$, $\bar\alpha_T \to 0$, so $x_T \approx \epsilon$ — pure noise.</p>
+                </div>
+
+                <div class="insight">
+                    <p class="insight-title">Why this matters for robotics</p>
+                    <p>
+                        The forward process defines a smooth path from "structured expert trajectory"
+                        to "random noise." The neural network's job is to learn to walk backwards
+                        along this path. The smoothness of the $\beta_t$ schedule ensures each
+                        backward step is a simple, learnable transformation.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="reverse-process">
+                <h2>The Reverse Process (Denoising)</h2>
+                <p>
+                    We want to learn $p_\theta(x_{t-1} \mid x_t)$ — how to remove noise.
+                    The true reverse is intractable, but for small $\beta_t$, it's approximately Gaussian:
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Derivation: Reverse Process</p>
+                    $$p_\theta(x_{t-1} \mid x_t) = \mathcal{N}(x_{t-1};\; \mu_\theta(x_t, t),\; \sigma_t^2 I)$$
+
+                    <p>
+                        The key insight (Ho et al., 2020): instead of predicting $\mu_\theta$ directly,
+                        predict the <em>noise</em> $\epsilon_\theta(x_t, t)$ that was added.
+                        Then recover the mean via:
+                    </p>
+
+                    $$\mu_\theta(x_t, t) = \frac{1}{\sqrt{\alpha_t}}\left(x_t - \frac{\beta_t}{\sqrt{1-\bar\alpha_t}}\,\epsilon_\theta(x_t, t)\right)$$
+
+                    <p>
+                        <strong>Intuition:</strong> Predicting "what noise was added" is equivalent to
+                        predicting "what the clean signal looks like." The network answers:
+                        <em>"Given this noisy thing, what part of it is just noise?"</em>
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="training-objective">
+                <h2>Training Objective</h2>
+                <p>
+                    The loss is stunningly simple — just predict the noise:
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">The Loss Function</p>
+                    $$\mathcal{L} = \mathbb{E}_{t \sim U[1,T],\; x_0 \sim q,\; \epsilon \sim \mathcal{N}(0,I)}\Big[\|\epsilon - \epsilon_\theta(x_t, t)\|^2\Big]$$
+
+                    <p><strong>In plain English:</strong></p>
+                    <ol>
+                        <li>Sample a clean action $x_0$ from demonstrations</li>
+                        <li>Sample a random timestep $t$</li>
+                        <li>Add noise: $x_t = \sqrt{\bar\alpha_t}\, x_0 + \sqrt{1-\bar\alpha_t}\, \epsilon$</li>
+                        <li>Predict the noise: $\hat\epsilon = \epsilon_\theta(x_t, t)$</li>
+                        <li>Loss = MSE between true noise and predicted noise</li>
+                    </ol>
+
+                    <p>That's it. That's the entire training procedure.</p>
+                </div>
+
+                <div class="caveat">
+                    <p><strong>Why MSE and not something fancier?</strong>
+                    The variational lower bound (ELBO) derivation shows that the optimal
+                    denoising objective decomposes into independent per-timestep MSE terms.
+                    Ho et al. showed empirically that the simplified MSE works as well or
+                    better than the full weighted ELBO objective.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="ddpm-vs-ddim">
+                <h2>DDPM vs DDIM</h2>
+                <p>
+                    Two ways to run the reverse process at inference time:
+                </p>
+
+                <h3>DDPM (Stochastic)</h3>
+                <p>Add noise at each step — faithful to the probabilistic formulation but requires all $T$ steps (e.g., 100):</p>
+                $$x_{t-1} = \mu_\theta(x_t, t) + \sigma_t\, z, \quad z \sim \mathcal{N}(0, I)$$
+
+                <h3>DDIM (Deterministic)</h3>
+                <p>Skip the stochastic term — enables <strong>fewer steps</strong> (e.g., 10 steps instead of 100):</p>
+                $$x_{t-1} = \sqrt{\bar\alpha_{t-1}}\,\hat{x}_0 + \sqrt{1-\bar\alpha_{t-1}}\,\epsilon_\theta(x_t, t)$$
+
+                <p>where $\hat{x}_0 = \frac{x_t - \sqrt{1-\bar\alpha_t}\,\epsilon_\theta(x_t,t)}{\sqrt{\bar\alpha_t}}$ is the predicted clean sample.</p>
+
+                <div class="insight">
+                    <p class="insight-title">For robotics: use DDIM</p>
+                    <p>
+                        Robots need fast inference (10-50Hz control). DDIM with 10 steps gives
+                        essentially the same quality as DDPM with 100 steps, but 10× faster.
+                        Our implementation uses DDIM with 10 inference steps.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="why-actions">
+                <h2>Why Diffusion for Robot Actions?</h2>
+                <p>
+                    Why not just regress actions directly with MSE? Or use a VAE? Or a GAN?
+                    The answer lies in <strong>multimodality</strong>.
+                </p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="multimodality">
+                <h2>The Multimodality Problem</h2>
+                <p>
+                    Consider picking up a mug. You can grasp it by the handle (from the left),
+                    by the body (from the top), or by the rim. All are valid. The action
+                    distribution is <em>multimodal</em>.
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Why MSE fails on multimodal data</p>
+                    <p>If the true distribution has two modes at $a_1$ and $a_2$:</p>
+                    $$\arg\min_a \mathbb{E}\left[\|a - a^*\|^2\right] = \frac{a_1 + a_2}{2}$$
+                    <p>
+                        MSE regression outputs the <em>mean</em> — which is between the two valid
+                        actions and is itself <strong>not valid</strong>. The robot reaches halfway
+                        and does nothing useful.
+                    </p>
+                    <p>
+                        Diffusion models naturally generate samples from multimodal distributions.
+                        During one rollout, the stochastic initialization commits to one mode and
+                        stays there — no averaging between incompatible actions.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="action-chunking">
+                <h2>Action Chunking</h2>
+                <p>
+                    Instead of predicting one action $a_t$, predict a <strong>chunk</strong>
+                    of $H$ future actions $[a_t, a_{t+1}, \ldots, a_{t+H-1}]$.
+                </p>
+
+                <div class="derivation">
+                    <p class="derivation-title">Why chunks work</p>
+                    <p><strong>Temporal consistency:</strong> One denoising pass produces an
+                    entire trajectory segment. All actions in the chunk are consistent with
+                    each other — no jitter between independently predicted steps.</p>
+
+                    <p><strong>The numbers:</strong></p>
+                    <ul>
+                        <li>$H = 16$ — prediction horizon (generate 16 future actions)</li>
+                        <li>$k = 8$ — execution horizon (execute only the first 8, then re-plan)</li>
+                        <li>$T_o = 2$ — observation horizon (condition on last 2 observations)</li>
+                    </ul>
+
+                    <p><strong>Computational benefit:</strong> One forward pass of DDIM (10 denoising steps)
+                    produces 8 actions. Without chunking, you'd need one DDIM pass per action.
+                    That's 8× less compute for the same control rate.</p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="receding-horizon">
+                <h2>Receding Horizon Control</h2>
+                <p>
+                    Execute $k$ actions from the chunk, then <em>re-plan</em> with fresh
+                    observations. This creates a feedback loop:
+                </p>
+                <pre><code class="language-python">while not done:
+    # Observe
+    obs = get_observation()  # last T_o frames
+
+    # Plan — one DDIM pass produces H actions
+    action_chunk = policy.predict_action(obs)  # shape: (H, action_dim)
+
+    # Execute only first k actions
+    for a in action_chunk[:k]:
+        env.step(a)
+</code></pre>
+
+                <div class="insight">
+                    <p class="insight-title">The trade-off</p>
+                    <p>
+                        <strong>Large $k$</strong> = fewer re-plans, faster but less reactive to perturbations.<br>
+                        <strong>Small $k$</strong> = frequent re-plans, slower but handles disturbances.
+                    </p>
+                    <p>
+                        We use $k = H/2 = 8$. Adjacent chunks overlap by 8 steps, providing
+                        continuity while staying reactive.
+                    </p>
+                </div>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="unet-backbone">
+                <h2>1D U-Net Backbone</h2>
+                <p>
+                    The noise prediction network $\epsilon_\theta$ is a <strong>1D convolutional U-Net</strong>.
+                    The input is the noisy action sequence (shape: <code>action_dim × horizon</code>),
+                    treated as a 1D signal with <code>action_dim</code> channels.
+                </p>
+
+                <details>
+                    <summary>Architecture Details</summary>
+                    <pre><code class="language-python"># Input: (B, action_dim, horizon) = (B, 4, 16)
+# Conditioning: obs_embed (B, 256) + morph_cond (B, 64)
+# Output: (B, action_dim, horizon) = predicted noise
+
+ConditionalUnet1D(
+    action_dim=4,          # joint positions
+    cond_dim=256,          # obs encoder output
+    morph_dim=64,          # morphology + task
+    down_dims=[256, 512, 1024],
+    kernel_size=5,
+)</code></pre>
+                    <p>
+                        The U-Net has skip connections between encoder and decoder at each resolution.
+                        FiLM conditioning injects morphology information at every layer (see Week 3).
+                    </p>
+                </details>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="conditioning">
+                <h2>Observation Conditioning</h2>
+                <p>
+                    The policy is <em>conditioned</em> on observations — it doesn't generate
+                    actions in a vacuum. The observation embedding enters the U-Net as a
+                    global conditioning vector:
+                </p>
+                $$\text{cond} = \text{obs\_encoder}(I_{1:T_o},\, p_{1:T_o})$$
+                <p>
+                    where $I$ are RGB images (processed by ResNet-18) and $p$ is proprioception
+                    (joint positions/velocities). Both are stacked over the observation horizon
+                    $T_o = 2$ to provide temporal context.
+                </p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="timestep-embedding">
+                <h2>Timestep Embedding</h2>
+                <p>
+                    The network must know "how noisy is the input?" — this is encoded via
+                    sinusoidal position embeddings (same technique as Transformers):
+                </p>
+                $$\text{emb}(t) = [\sin(t/10000^{0/d}),\, \cos(t/10000^{0/d}),\, \ldots,\, \sin(t/10000^{(d-1)/d})]$$
+                <p>
+                    The timestep embedding is added to the conditioning vector at each U-Net
+                    layer, telling the network whether to make large corrections (high $t$,
+                    very noisy) or fine adjustments (low $t$, nearly clean).
+                </p>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="algorithm">
+                <h2>Full Algorithm</h2>
+
+                <h3>Training</h3>
+                <pre><code class="language-python">for batch in dataloader:
+    obs, actions = batch          # actions: (B, H, action_dim)
+    actions = actions.permute(0, 2, 1)  # → (B, action_dim, H) for Conv1D
+
+    # 1. Encode observations
+    obs_embed = obs_encoder(obs)
+
+    # 2. Sample random timestep
+    t = randint(0, T, size=(B,))
+
+    # 3. Add noise
+    noise = randn_like(actions)
+    noisy_actions = sqrt(alpha_bar[t]) * actions + sqrt(1 - alpha_bar[t]) * noise
+
+    # 4. Predict noise
+    noise_pred = unet(noisy_actions, t, obs_embed, morph_cond)
+
+    # 5. MSE loss
+    loss = mse(noise_pred, noise)
+    loss.backward()
+    optimizer.step()</code></pre>
+
+                <h3>Inference (DDIM)</h3>
+                <pre><code class="language-python">def predict_action(obs, morph_vec):
+    obs_embed = obs_encoder(obs)
+
+    # Start from pure noise
+    x = randn(B, action_dim, H)
+
+    # Iteratively denoise (10 steps)
+    for t in ddim_timesteps:  # e.g., [999, 888, ..., 111, 0]
+        noise_pred = unet(x, t, obs_embed, morph_cond)
+
+        # DDIM update step
+        x0_pred = (x - sqrt(1-alpha_bar[t]) * noise_pred) / sqrt(alpha_bar[t])
+        x = sqrt(alpha_bar[t-1]) * x0_pred + sqrt(1-alpha_bar[t-1]) * noise_pred
+
+    return x.permute(0, 2, 1)[:, :k, :]  # first k actions</code></pre>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="hyperparameters">
+                <h2>Key Hyperparameters</h2>
+                <table class="results-table">
+                    <thead>
+                        <tr><th>Parameter</th><th>Value</th><th>Why</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>$T$ (train steps)</td><td>100</td><td>Enough for smooth schedule, not too many</td></tr>
+                        <tr><td>Inference steps</td><td>10</td><td>DDIM enables 10× speedup</td></tr>
+                        <tr><td>$\beta$ schedule</td><td>cosine</td><td>Smoother than linear near $t=0$</td></tr>
+                        <tr><td>Prediction type</td><td>$\epsilon$</td><td>Noise prediction (vs $x_0$ or $v$)</td></tr>
+                        <tr><td>Action horizon $H$</td><td>16</td><td>Long enough for full subtask</td></tr>
+                        <tr><td>Execute horizon $k$</td><td>8</td><td>Re-plan every 8 steps</td></tr>
+                        <tr><td>Obs horizon $T_o$</td><td>2</td><td>Minimal temporal context</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- ============================================================ -->
+            <section id="practical-tips">
+                <h2>Practical Tips</h2>
+                <div class="insight">
+                    <p class="insight-title">What actually matters in practice</p>
+                    <ol>
+                        <li><strong>Action normalization:</strong> Normalize actions to $[-1, 1]$. The noise schedule assumes unit-scale data.</li>
+                        <li><strong>EMA:</strong> Use exponential moving average of weights (decay=0.995). Smooths training noise.</li>
+                        <li><strong>Gradient clipping:</strong> Clip at norm 1.0. Prevents divergence on rare high-loss batches.</li>
+                        <li><strong>Cosine schedule > linear:</strong> Cosine preserves more signal at low timesteps, giving better fine-grained control predictions.</li>
+                        <li><strong>Don't clip actions during diffusion:</strong> Let the U-Net output go beyond $[-1,1]$ during intermediate steps. Only clip the final output.</li>
+                    </ol>
+                </div>
+            </section>
+
+            <!-- Navigation -->
+            <nav class="article-nav">
+                <span></span>
+                <a href="morphology-conditioning.html">Next: Morphology Conditioning →</a>
+            </nav>
+        </article>
+    </div>
+
+    <footer class="site-footer">
+        <p>Horizon Clarity — One Policy, Any Body</p>
+    </footer>
+</body>
+</html>
