@@ -180,10 +180,12 @@ def main():
         help="Path to checkpoint .pt file",
     )
     parser.add_argument(
-        "--robot", default="franka", choices=["franka", "ur5", "so101"]
+        "--robot", default="franka",
+        choices=["franka", "ur5", "widowx", "lite6", "so101"]
     )
     parser.add_argument(
-        "--task", default="pick_place", choices=["pick_place", "stack"]
+        "--task", default="pick_place",
+        choices=["reach", "pick_place", "push", "stack", "peg_insertion"]
     )
     parser.add_argument("--n-episodes", type=int, default=10)
     parser.add_argument("--render", action="store_true", help="Render with viewer")

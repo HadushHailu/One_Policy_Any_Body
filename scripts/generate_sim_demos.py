@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Generate simulated pick-and-place demonstrations with scripted policies.
+"""Generate simulated demonstrations for all OPAB tasks.
 
-Collects expert demonstrations across multiple robot embodiments and saves
-them in HDF5 format compatible with downstream policy training.
+Collects expert demonstrations across multiple robot embodiments and tasks,
+saving them in HDF5 format compatible with downstream policy training.
+
+Tasks: reach, pick_place, push, stack, peg_insertion
+Robots: franka, ur5, so101
 
 Usage:
-    python scripts/generate_sim_demos.py --robot so101 --n_demos 50
-    python scripts/generate_sim_demos.py --robot franka --n_demos 50
-    python scripts/generate_sim_demos.py --robot ur5 --n_demos 50
-    python scripts/generate_sim_demos.py --all --n_demos 50
+    python scripts/generate_sim_demos.py --robot franka --task reach --n_demos 100
+    python scripts/generate_sim_demos.py --all --n_demos 100
+    python scripts/generate_sim_demos.py --all --all_tasks --n_demos 100
 """
 import argparse
 import time
@@ -21,7 +23,11 @@ import numpy as np
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from opab.env import make_env, ScriptedPickPlace, ScriptedStack, SUPPORTED_ROBOTS, SUPPORTED_TASKS
+from opab.env import (
+    make_env, ScriptedPickPlace, ScriptedStack, ScriptedReach,
+    ScriptedPush, ScriptedPegInsertion,
+    SUPPORTED_ROBOTS, SUPPORTED_TASKS, TASK_ID_MAP,
+)
 
 
 def collect_demos(
@@ -55,10 +61,17 @@ def collect_demos(
         domain_randomization=domain_randomization, task=task,
     )
 
-    if task == "stack":
+    # Select scripted policy for this task
+    if task == "reach":
+        policy = ScriptedReach(robot_name=robot)
+    elif task == "push":
+        policy = ScriptedPush(robot_name=robot)
+    elif task == "stack":
         from opab.env.base_env import RobotConfig
         cube_size = RobotConfig(robot).cube_size
         policy = ScriptedStack(robot_name=robot, cube_size=cube_size)
+    elif task == "peg_insertion":
+        policy = ScriptedPegInsertion(robot_name=robot)
     else:
         policy = ScriptedPickPlace(robot_name=robot)
 
@@ -86,12 +99,25 @@ def collect_demos(
         step_count = 0
 
         while not terminated and not truncated:
-            # Get action from scripted policy
-            cube_pos = env.get_cube_pos()
-            if task == "stack":
+            # Get action from scripted policy (task-specific arguments)
+            if task == "reach":
+                target_pos = env.get_reach_target_pos()
+                action = policy.get_action(obs, target_pos)
+            elif task == "push":
+                cube_pos = env.get_cube_pos()
+                target_pos = env.get_target_pos()
+                action = policy.get_action(obs, cube_pos, target_pos)
+            elif task == "stack":
+                cube_pos = env.get_cube_pos()
                 cube_b_pos = env.get_cube_b_pos()
                 action = policy.get_action(obs, cube_pos, cube_b_pos)
+            elif task == "peg_insertion":
+                peg_pos = env.get_peg_pos()
+                hole_pos = env.get_hole_pos()
+                action = policy.get_action(obs, peg_pos, hole_pos)
             else:
+                # pick_place
+                cube_pos = env.get_cube_pos()
                 target_pos = env.get_target_pos()
                 action = policy.get_action(obs, cube_pos, target_pos)
 
@@ -132,9 +158,8 @@ def collect_demos(
             )
 
     # Save to HDF5
-    task_name = "stack" if task == "stack" else "pick_place"
-    save_path = output_dir / f"{robot}_{task_name}.hdf5"
-    _save_hdf5(all_episodes, save_path, robot, task=task_name)
+    save_path = output_dir / f"{robot}_{task}.hdf5"
+    _save_hdf5(all_episodes, save_path, robot, task=task)
 
     elapsed = time.time() - t_start
     success_rate = successes / n_demos * 100
@@ -173,7 +198,7 @@ def _save_hdf5(episodes: list[dict], path: Path, robot: str, task: str = "pick_p
         )
         f.attrs["domain_randomization"] = True  # flag for downstream
         f.attrs["task"] = task
-        f.attrs["task_id"] = 0 if task == "pick_place" else 1
+        f.attrs["task_id"] = TASK_ID_MAP.get(task, 0)
 
         for i, ep in enumerate(episodes):
             grp = f.create_group(f"episode_{i}")
@@ -199,16 +224,18 @@ def _save_hdf5(episodes: list[dict], path: Path, robot: str, task: str = "pick_p
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Generate sim pick-and-place demonstrations"
+        description="Generate sim manipulation demonstrations"
     )
     parser.add_argument(
         "--robot", choices=list(SUPPORTED_ROBOTS),
         help="Robot to generate demos for"
     )
     parser.add_argument("--all", action="store_true", help="Generate for all robots")
-    parser.add_argument("--n_demos", type=int, default=50, help="Episodes per robot")
+    parser.add_argument("--n_demos", type=int, default=100, help="Episodes per robot per task")
     parser.add_argument("--task", choices=list(SUPPORTED_TASKS), default="pick_place",
-                        help="Task type: pick_place or stack")
+                        help="Task type")
+    parser.add_argument("--all_tasks", action="store_true",
+                        help="Generate demos for ALL tasks (overrides --task)")
     parser.add_argument("--out", type=str, default="data/demos", help="Output directory")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--max_steps", type=int, default=300, help="Max steps/episode")
@@ -219,20 +246,30 @@ def main():
         parser.error("Specify --robot or --all")
 
     robots = list(SUPPORTED_ROBOTS) if args.all else [args.robot]
+    tasks = list(SUPPORTED_TASKS) if args.all_tasks else [args.task]
 
-    for robot in robots:
-        print(f"\n{'='*60}")
-        print(f"Generating {args.n_demos} demos for: {robot}")
-        print(f"{'='*60}")
-        collect_demos(
-            robot=robot,
-            n_demos=args.n_demos,
-            output_dir=Path(args.out),
-            seed=args.seed,
-            max_episode_steps=args.max_steps,
-            domain_randomization=args.dr,
-            task=args.task,
-        )
+    total_start = time.time()
+    for task in tasks:
+        for robot in robots:
+            print(f"\n{'='*60}")
+            print(f"Generating {args.n_demos} demos: {robot} / {task}")
+            print(f"{'='*60}")
+            collect_demos(
+                robot=robot,
+                n_demos=args.n_demos,
+                output_dir=Path(args.out),
+                seed=args.seed,
+                max_episode_steps=args.max_steps,
+                domain_randomization=args.dr,
+                task=task,
+            )
+
+    total_elapsed = time.time() - total_start
+    n_combos = len(robots) * len(tasks)
+    print(f"\n{'='*60}")
+    print(f"ALL DONE: {n_combos} robot-task combos, "
+          f"{args.n_demos * n_combos} total episodes in {total_elapsed:.1f}s")
+    print(f"{'='*60}")
 
 
 if __name__ == "__main__":

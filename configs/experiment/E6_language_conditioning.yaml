@@ -1,0 +1,33 @@
+# E6_language_conditioning experiment config
+# Original run.sh contents preserved below:
+# ---
+# #!/usr/bin/env bash
+# # E6: Language-Conditioning Ablation
+# # Tests whether frozen SigLIP language embeddings improve multi-task selection.
+# # Compares: task-ID one-hot vs. SigLIP text embedding.
+# set -euo pipefail
+# 
+# SEEDS=(42 123 456)
+# ROBOTS=("franka" "ur5" "so101")
+# MODES=("task_id" "language")
+# 
+# echo "===== E6: Language Conditioning Ablation ====="
+# 
+# for seed in "${SEEDS[@]}"; do
+#   for mode in "${MODES[@]}"; do
+#     echo "--- Seed=${seed} Mode=${mode} ---"
+#     python train.py \
+#       seed=${seed} \
+#       policy=morphology_dp \
+#       policy.language_mode=${mode} \
+#       training.n_epochs=500 \
+#       training.robot_list="[${ROBOTS[*]// /,}]" \
+#       wandb.group="E6_language_${mode}" \
+#       wandb.name="seed${seed}_${mode}" \
+#       checkpoint_dir=outputs/E6_language/${mode}/seed${seed}
+#   done
+# done
+# 
+# echo ""
+# echo "Results: compare wandb groups E6_language_task_id vs E6_language_language"
+# echo "Done."

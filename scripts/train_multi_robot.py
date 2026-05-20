@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Week 3 multi-robot training — trains one policy on all 3 robots × 2 tasks.
+Multi-robot multi-task training — trains one policy on 3 robots × 5 tasks.
 
 Usage:
     python scripts/train_multi_robot.py
@@ -26,9 +26,12 @@ def main():
     parser.add_argument("--device", type=str, default="cuda", help="Device (cuda/cpu)")
     parser.add_argument("--robots", nargs="+", default=["franka", "ur5", "so101"],
                         help="Robots to train on")
-    parser.add_argument("--tasks", nargs="+", default=["pick_place", "stack"],
+    parser.add_argument("--tasks", nargs="+",
+                        default=["reach", "pick_place", "push", "stack", "peg_insertion"],
                         help="Tasks to train on")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
+    parser.add_argument("--resume", type=str, default=None,
+                        help="Path to checkpoint (latest.pt or best.pt) to resume from")
     args = parser.parse_args()
 
     # Build config from defaults + overrides
@@ -57,6 +60,14 @@ def main():
     cfg.output_dir = f"data/outputs/{ts}_multi_{n_robots}r_{n_tasks}t"
     cfg.checkpoint_dir = f"{cfg.output_dir}/checkpoints"
     cfg.media_dir = f"{cfg.output_dir}/media"
+
+    # If resuming, use the same output dir as the checkpoint
+    if args.resume:
+        ckpt_path = Path(args.resume)
+        cfg.checkpoint_dir = str(ckpt_path.parent)
+        cfg.output_dir = str(ckpt_path.parent.parent)
+        cfg.resume_checkpoint = str(ckpt_path)
+        logger.info(f"  Resuming from: {args.resume}")
 
     logger.info(f"Training config:")
     logger.info(f"  Robots: {args.robots}")

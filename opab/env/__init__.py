@@ -4,17 +4,28 @@ OPAB environment package.
 Provides unified manipulation environments for multiple robot embodiments.
 """
 from opab.env.base_env import PickPlaceEnv, RobotConfig
-from opab.env.scripted_policies import ScriptedPickPlace, ScriptedStack
+from opab.env.scripted_policies import (
+    ScriptedPickPlace, ScriptedStack, ScriptedReach, ScriptedPush, ScriptedPegInsertion
+)
 from opab.env.domain_randomization import DomainRandomizer, DRConfig
 
 
-SUPPORTED_ROBOTS = ("franka", "ur5", "so101")
-SUPPORTED_TASKS = ("pick_place", "stack")
+SUPPORTED_ROBOTS = ("franka", "ur5", "widowx", "lite6", "so101")
+SUPPORTED_TASKS = ("reach", "pick_place", "push", "stack", "peg_insertion")
+
+# Task name → integer ID mapping (used in HDF5 and by TaskEncoder)
+TASK_ID_MAP = {
+    "reach": 0,
+    "pick_place": 1,
+    "push": 2,
+    "stack": 3,
+    "peg_insertion": 4,
+}
 
 
 def make_env(
     robot: str = "franka",
-    image_size: tuple[int, int] = (84, 84),
+    image_size: tuple[int, int] = (128, 128),
     control_freq: float = 20.0,
     max_episode_steps: int = 300,
     seed: int | None = None,
@@ -25,7 +36,7 @@ def make_env(
     Factory function — creates a PickPlaceEnv for the specified robot.
 
     Args:
-        robot: One of 'franka', 'ur5', 'so101'
+        robot: One of 'franka', 'ur5', 'widowx', 'lite6', 'so101'
         image_size: Camera resolution (H, W)
         control_freq: Control loop frequency (Hz)
         max_episode_steps: Episode length limit
@@ -67,8 +78,12 @@ __all__ = [
     "RobotConfig",
     "ScriptedPickPlace",
     "ScriptedStack",
+    "ScriptedReach",
+    "ScriptedPush",
+    "ScriptedPegInsertion",
     "DomainRandomizer",
     "DRConfig",
     "SUPPORTED_ROBOTS",
     "SUPPORTED_TASKS",
+    "TASK_ID_MAP",
 ]

@@ -1,0 +1,16 @@
+<mujoco model="partnet_9d98b2c3591441a83321831d2245cf06">
+  <compiler angle="radian"/>
+
+  <asset>
+    <mesh name="link_0" content_type="model/obj" file="cvx_objs/link_0.obj"/>
+    <mesh name="link_1" content_type="model/obj" file="cvx_objs/link_1.obj"/>
+  </asset>
+
+  <worldbody>
+    <geom quat="0.5 0.5 -0.5 -0.5" type="mesh" mesh="link_1"/>
+    <body name="link_0" pos="0.152628 -0.000210755 0" quat="0.5 0.5 -0.5 -0.5">
+      <joint name="joint_0" pos="0 0 0" axis="0 1 0" range="-1.5708 1.5708"/>
+      <geom type="mesh" mesh="link_0"/>
+    </body>
+  </worldbody>
+</mujoco>

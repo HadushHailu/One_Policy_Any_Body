@@ -105,14 +105,36 @@ class TrainMorphDPWorkspace:
         )
 
         # ----------------------------------------------------------
-        # 4. Training loop
+        # 3b. Resume from checkpoint if specified
         # ----------------------------------------------------------
+        start_epoch = 0
         global_step = 0
         best_loss = float("inf")
         ckpt_dir = Path(cfg.get("checkpoint_dir", "data/outputs/checkpoints"))
         ckpt_dir.mkdir(parents=True, exist_ok=True)
 
-        for epoch in range(cfg.training.num_epochs):
+        resume_path = cfg.get("resume_checkpoint", None)
+        if resume_path and Path(resume_path).exists():
+            logger.info(f"Resuming from checkpoint: {resume_path}")
+            ckpt = torch.load(resume_path, map_location=self.device, weights_only=False)
+            policy.load_state_dict(ckpt["model_state_dict"])
+            ema.load_state_dict(ckpt["ema_state_dict"])
+            optimizer.load_state_dict(ckpt["optimizer_state_dict"])
+            start_epoch = ckpt["epoch"] + 1
+            global_step = ckpt.get("global_step", 0)
+            best_loss = ckpt.get("loss", float("inf"))
+            # Advance LR scheduler to the correct epoch
+            for _ in range(start_epoch):
+                lr_scheduler.step()
+            logger.info(
+                f"  Resumed at epoch {start_epoch}, "
+                f"global_step={global_step}, best_loss={best_loss:.6f}"
+            )
+
+        # ----------------------------------------------------------
+        # 4. Training loop
+        # ----------------------------------------------------------
+        for epoch in range(start_epoch, cfg.training.num_epochs):
             policy.train()
             epoch_loss = 0.0
             n_batches = 0

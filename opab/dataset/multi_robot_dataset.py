@@ -44,7 +44,10 @@ class MultiRobotDataset(Dataset):
         ('pick_place' -> 0, 'stack' -> 1).
     """
 
-    TASK_NAME_TO_ID = {"pick_place": 0, "stack": 1}
+    TASK_NAME_TO_ID = {
+        "reach": 0, "pick_place": 1, "push": 2,
+        "stack": 3, "peg_insertion": 4,
+    }
 
     def __init__(
         self,
@@ -125,11 +128,12 @@ class MultiRobotDataset(Dataset):
     # ==============================================================
     @staticmethod
     def _infer_task_id(path: Path) -> int:
-        """Infer task_id from filename: 'pick_place' -> 0, 'stack' -> 1."""
+        """Infer task_id from filename convention: {robot}_{task}.hdf5"""
         name = path.stem.lower()
-        if "stack" in name:
-            return 1
-        return 0  # default pick_place
+        for task_name, tid in MultiRobotDataset.TASK_NAME_TO_ID.items():
+            if task_name in name:
+                return tid
+        return 1  # default pick_place
 
     def _pad_proprio(self, proprio: np.ndarray) -> np.ndarray:
         """Pad proprioception to ``max_proprio_dim`` joints."""

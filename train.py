@@ -25,7 +25,7 @@ from omegaconf import DictConfig
 
 @hydra.main(
     version_base=None,
-    config_path="opab/config",
+    config_path="configs",
     config_name="default",
 )
 def main(cfg: DictConfig) -> None:

@@ -1,0 +1,27 @@
+# WidowX 250s (Trossen Robotics) — 6-DoF tabletop manipulator
+# Used in Bridge V2 dataset, RT-2, Octo.
+name: widowx
+urdf: assets/mujoco_menagerie/trossen_wx250s/wx250s.xml
+n_joints: 6
+gripper_type: parallel_jaw
+
+# DH parameters from Trossen WX-250s URDF
+# Convention: [a (m), d (m), alpha (rad), theta_offset (rad)]
+dh_params:
+  - [0.0,     0.0727,  1.5708,  0.0]    # waist (base rotation)
+  - [0.206,   0.0,     0.0,     0.0]    # shoulder
+  - [0.200,   0.0,     0.0,     0.0]    # elbow
+  - [0.0,     0.0,     1.5708,  0.0]    # forearm_roll
+  - [0.0,     0.065,  -1.5708,  0.0]    # wrist_angle
+  - [0.0,     0.041,   0.0,     0.0]    # wrist_rotate
+
+joint_limits:
+  lower: [-3.14159, -1.8849, -2.1468, -3.14159, -1.7453, -3.14159]
+  upper: [ 3.14159,  1.9722,  1.6057,  3.14159,  2.1468,  3.14159]
+
+workspace_radius: 0.30   # meters (effective reach ~300mm)
+payload_kg: 0.25
+gripper_max_width: 0.037  # meters (slide joint range)
+
+# Padding: WidowX has 6 joints, pad to 7 for uniform input
+pad_to_n_joints: 7

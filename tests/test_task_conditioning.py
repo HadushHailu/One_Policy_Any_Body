@@ -36,7 +36,7 @@ def _make_cfg():
     from omegaconf import OmegaConf
 
     return OmegaConf.load(
-        str(Path(__file__).resolve().parents[1] / "opab/config/policy/morphology_dp.yaml")
+        str(Path(__file__).resolve().parents[1] / "configs/policy/morphology_dp.yaml")
     )
 
 
@@ -199,7 +199,7 @@ class TestDatasetTaskId:
             Path("/home/hadush/dev/One_Policy_Any_Body/data/demos/franka_pick_place.hdf5"),
             Path("/home/hadush/dev/One_Policy_Any_Body/data/demos/franka_stack.hdf5"),
         ]
-        cfgs = [OmegaConf.load("/home/hadush/dev/One_Policy_Any_Body/opab/config/robot/franka.yaml")] * 2
+        cfgs = [OmegaConf.load("/home/hadush/dev/One_Policy_Any_Body/configs/robot/franka.yaml")] * 2
 
         ds = MultiRobotDataset(paths, cfgs)
         sample = ds[0]

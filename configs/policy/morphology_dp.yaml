@@ -1,0 +1,52 @@
+# Morphology-Conditioned Diffusion Policy
+name: morphology_dp
+_target_: opab.policy.morphology_conditioned_dp.MorphologyConditionedDP
+
+# ---- Task Conditioning ----
+n_tasks: 5                        # reach=0, pick_place=1, push=2, stack=3, peg_insertion=4
+task_embed_dim: 32
+use_task_conditioning: true
+
+# ---- Diffusion ----
+diffusion:
+  num_train_timesteps: 100
+  num_inference_steps: 10         # DDIM acceleration
+  noise_schedule: cosine          # cosine | linear
+  prediction_type: epsilon        # epsilon | sample | v_prediction
+
+# ---- Action Space ----
+action:
+  horizon: 16                     # predict 16 future actions
+  obs_horizon: 2                  # condition on 2 observations
+  action_dim: 4                   # task-space: [dx, dy, dz, gripper]
+  execute_horizon: 8              # execute 8, then re-plan
+
+# ---- U-Net ----
+unet:
+  down_dims: [256, 512, 1024]
+  kernel_size: 5
+  n_groups: 8
+  use_film: true                  # FiLM conditioning from morphology
+
+# ---- Observation Encoder ----
+obs_encoder:
+  type: resnet18
+  pretrained: true
+  frozen: false
+  output_dim: 256
+  image_size: 128
+  crop_shape: [116, 116]    # random crop augment (90% of 128)           # random crop augmentation
+
+# ---- Proprioception ----
+proprio_encoder:
+  input_dim: 7                   # joint positions
+  hidden_dims: [64, 64]
+  output_dim: 64
+
+# ---- Morphology Encoder ----
+morphology_encoder:
+  input_dim: 46                  # 7 joints × 6 features + 4 global = 46
+  hidden_dims: [64, 64]
+  output_dim: 32
+  activation: relu
+  use_layer_norm: true

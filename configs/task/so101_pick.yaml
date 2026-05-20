@@ -1,0 +1,33 @@
+# Multi-task configuration for SO-101
+name: so101_pick
+task_type: pick_and_place
+
+env:
+  robot: so101
+  image_size: [128, 128]
+  control_freq: 20.0
+  max_episode_steps: 300
+  camera: overhead_cam
+  task: pick_place
+
+objects:
+  - type: cube
+    size: 0.012
+    randomize_position: true
+    randomize_range: 0.02
+
+success:
+  type: cube_in_zone
+  threshold: 0.01875
+  height_tolerance: 0.03
+
+domain_randomization:
+  visual:
+    camera_position_noise: 0.01
+    lighting_intensity_range: [0.5, 1.5]
+    table_color_randomize: true
+  dynamics:
+    cube_mass_range: 0.3
+    cube_friction_range: 0.3
+    joint_damping_range: 0.2
+    gravity_range: 0.1

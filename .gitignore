@@ -9,6 +9,7 @@ docs/
 # ==============================
 data/
 outputs/
+videos/
 wandb/
 logs/
 
