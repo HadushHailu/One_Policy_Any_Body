@@ -71,6 +71,12 @@ class RobotConfig:
             self.cam_pos = np.array([0.25, 0.0, 1.3])
             self.cube_randomize_range = 0.0  # Disabled for v1 (fixed positions, BC standard)
             self.success_threshold = 0.025
+            # Camera parameters (per-robot)
+            self.cameras = {
+                "sideview_0": {"lookat": [0.30, 0.0, 0.50], "distance": 0.85, "azimuth": 150, "elevation": -22},
+                "agentview_0": {"pos": [0.25, 0.0, 1.3], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "topdown_0": {"pos": [0.25, 0.0, 1.3], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
+            }
             # Peg insertion parameters
             self.peg_radius = 0.010
             self.peg_half_length = 0.050
@@ -131,6 +137,12 @@ class RobotConfig:
             self.cam_pos = np.array([0.30, 0.0, 1.3])
             self.cube_randomize_range = 0.0  # Disabled for v1 (fixed positions, BC standard)
             self.success_threshold = 0.025
+            # Camera parameters (per-robot)
+            self.cameras = {
+                "sideview_0": {"lookat": [0.30, 0.0, 0.50], "distance": 0.85, "azimuth": 150, "elevation": -22},
+                "agentview_0": {"pos": [0.30, 0.0, 1.3], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "topdown_0": {"pos": [0.30, 0.0, 1.3], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
+            }
             # Peg insertion parameters
             self.peg_radius = 0.010
             self.peg_half_length = 0.050
@@ -185,6 +197,12 @@ class RobotConfig:
             self.cam_pos = np.array([0.15, 0.0, 1.2])
             self.cube_randomize_range = 0.0  # Disabled for v1 (fixed positions, BC standard)
             self.success_threshold = 0.0225
+            # Camera parameters (per-robot)
+            self.cameras = {
+                "sideview_0": {"lookat": [0.18, 0.0, 0.45], "distance": 0.75, "azimuth": 150, "elevation": -22},
+                "agentview_0": {"pos": [0.15, 0.0, 1.2], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "topdown_0": {"pos": [0.15, 0.0, 1.2], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
+            }
             # Peg insertion parameters
             self.peg_radius = 0.008
             self.peg_half_length = 0.030
@@ -239,18 +257,24 @@ class RobotConfig:
             self.cam_pos = np.array([0.20, 0.0, 1.2])
             self.cube_randomize_range = 0.0  # Disabled for v1 (fixed positions, BC standard)
             self.success_threshold = 0.0225
+            # Camera parameters (per-robot)
+            self.cameras = {
+                "sideview_0": {"lookat": [0.15, 0.0, 0.45], "distance": 0.70, "azimuth": 150, "elevation": -22},
+                "agentview_0": {"pos": [0.20, 0.0, 1.2], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "topdown_0": {"pos": [0.20, 0.0, 1.2], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
+            }
             # Peg insertion parameters
             self.peg_radius = 0.008
             self.peg_half_length = 0.030
             self.hole_clearance = 0.002
-            self.hole_depth = 0.040
+            self.hole_depth = 0.032  # half-height of walls; must be > peg_half_length for full insertion
 
             # Drawer task parameters
-            self.drawer_pos = np.array([0.20, 0.06, 0.42])
+            self.drawer_pos = np.array([0.22, 0.12, 0.42])
             self.drawer_size = np.array([0.035, 0.03, 0.02])
             self.drawer_slide_range = 0.05
             # Faucet/dial task parameters
-            self.faucet_pos = np.array([0.30, -0.08, 0.42])
+            self.faucet_pos = np.array([0.28, -0.12, 0.42])
             self.faucet_scale = 1.0
             self.faucet_target_angle = -1.2
             # Door open parameters
@@ -296,6 +320,12 @@ class RobotConfig:
             self.cam_pos = np.array([0.10, 0.0, 0.7])
             self.cube_randomize_range = 0.0  # Disabled for v1 (fixed positions, BC standard)
             self.success_threshold = 0.01875
+            # Camera parameters (per-robot)
+            self.cameras = {
+                "sideview_0": {"lookat": [0.12, 0.0, 0.28], "distance": 0.50, "azimuth": 150, "elevation": -22},
+                "agentview_0": {"pos": [0.10, 0.0, 0.7], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "topdown_0": {"pos": [0.10, 0.0, 0.7], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
+            }
             # Peg insertion parameters
             self.peg_radius = 0.006
             self.peg_half_length = 0.050
@@ -473,11 +503,32 @@ class PickPlaceEnv:
                 xml = xml[:end_tag+1] + '\n          ' + inject_site + xml[end_tag+1:]
 
 
-        # Override floor: replace checker material with flat gray
+        # Override floor: replace checker material with clean light warm gray
         # All menagerie scenes have: <geom name="floor" ... material="groundplane"/>
         xml = re.sub(
             r'(<geom\s+name="floor"[^/]*?)material="groundplane"([^/]*/\s*>)',
-            r'\1rgba="0.5 0.5 0.5 1"\2',
+            r'\1rgba="0.82 0.80 0.78 1"\2',
+            xml
+        )
+
+        # Override skybox: warm neutral gradient (studio look)
+        xml = re.sub(
+            r'<texture[^>]*type="skybox"[^/]*/\s*>',
+            '<texture type="skybox" builtin="gradient" rgb1="0.62 0.69 0.77" rgb2="0.92 0.91 0.88" width="512" height="3072"/>',
+            xml
+        )
+
+        # Override headlight for soft studio illumination
+        xml = re.sub(
+            r'<headlight[^/]*/\s*>',
+            '<headlight diffuse="0.7 0.68 0.65" ambient="0.35 0.35 0.38" specular="0.15 0.15 0.15"/>',
+            xml
+        )
+
+        # Override haze for atmospheric depth
+        xml = re.sub(
+            r'<rgba\s+haze="[^"]*"\s*/>',
+            '<rgba haze="0.75 0.78 0.82 1"/>',
             xml
         )
 
@@ -520,15 +571,19 @@ class PickPlaceEnv:
             friction="1.0 0.005 0.0001" />
     </body>
 
-    <site name="target_zone" pos="{cfg.target_pos[0]} {cfg.target_pos[1]} {cfg.target_pos[2]}"
-          size="{cfg.cube_size * 2} 0.002" rgba="0.1 0.8 0.1 0.5" type="cylinder" />
-
-    <camera name="overhead_cam" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
+    <camera name="agentview_0" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
             xyaxes="0 -1 0 0.966 0 0.259" fovy="60" />
-    <camera name="topdown_cam" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
+    <camera name="topdown_0" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
             xyaxes="1 0 0 0 1 0" fovy="60" />
-    <camera name="angled_cam" pos="{cfg.cam_pos[0] + 0.6} {cfg.cam_pos[1] - 0.5} {cfg.cam_pos[2] - 0.4}"
+    <camera name="sideview_0" pos="{cfg.cam_pos[0] + 0.6} {cfg.cam_pos[1] - 0.5} {cfg.cam_pos[2] - 0.4}"
             xyaxes="0.64 0.77 0 -0.41 0.35 0.84" fovy="45" />
+"""
+
+        # Target zone marker only for cube-based tasks
+        if self.task in ("pick_place", "push", "stack"):
+            objects += f"""
+    <site name="target_zone" pos="{cfg.target_pos[0]} {cfg.target_pos[1]} {cfg.target_pos[2]}"
+          size="{cfg.cube_size * 2} 0.002" rgba="0.35 0.75 0.45 0.35" type="cylinder" />
 """
 
         # Task-specific objects
@@ -538,9 +593,9 @@ class PickPlaceEnv:
     <body name="cube" pos="{cfg.cube_pos[0]} {cfg.cube_pos[1]} {cfg.cube_pos[2]}">
       <freejoint name="cube_joint" />
       <geom name="cube_geom" type="box" size="{cfg.cube_size} {cfg.cube_size} {cfg.cube_size}"
-            mass="{cfg.cube_mass}" rgba="0.9 0.1 0.1 1" condim="4"
-            friction="1.0 0.005 0.0001" contype="1" conaffinity="1"
-            solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" />
+            mass="{cfg.cube_mass}" rgba="0.85 0.20 0.15 1" condim="4"
+            friction="1.5 0.005 0.0001" contype="1" conaffinity="1"
+            solref="0.005 1" solimp="0.95 0.99 0.001" margin="0.002" />
     </body>
 """
 
@@ -567,7 +622,7 @@ class PickPlaceEnv:
     <body name="peg" pos="{peg_pos[0]} {peg_pos[1]} {peg_pos[2]}">
       <freejoint name="peg_joint" />
       <geom name="peg_geom" type="cylinder" size="{peg_r} {peg_hl}"
-            mass="0.02" rgba="0.2 0.6 0.9 1" condim="4"
+            mass="0.02" rgba="0.25 0.55 0.82 1" condim="4"
             friction="0.5 0.005 0.0001" contype="1" conaffinity="1"
             solref="0.005 1" solimp="0.95 0.99 0.001" />
     </body>
@@ -578,171 +633,171 @@ class PickPlaceEnv:
             pos="{((hole_inner_r + hole_outer_r)/2) * 1.000000} {((hole_inner_r + hole_outer_r)/2) * 0.000000} 0"
             euler="0 0 0.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_1" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.980785} {((hole_inner_r + hole_outer_r)/2) * 0.195090} 0"
             euler="0 0 11.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_2" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.923880} {((hole_inner_r + hole_outer_r)/2) * 0.382683} 0"
             euler="0 0 22.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_3" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.831470} {((hole_inner_r + hole_outer_r)/2) * 0.555570} 0"
             euler="0 0 33.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_4" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.707107} {((hole_inner_r + hole_outer_r)/2) * 0.707107} 0"
             euler="0 0 45.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_5" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.555570} {((hole_inner_r + hole_outer_r)/2) * 0.831470} 0"
             euler="0 0 56.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_6" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.382683} {((hole_inner_r + hole_outer_r)/2) * 0.923880} 0"
             euler="0 0 67.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_7" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.195090} {((hole_inner_r + hole_outer_r)/2) * 0.980785} 0"
             euler="0 0 78.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_8" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.000000} {((hole_inner_r + hole_outer_r)/2) * 1.000000} 0"
             euler="0 0 90.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_9" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.195090} {((hole_inner_r + hole_outer_r)/2) * 0.980785} 0"
             euler="0 0 101.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_10" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.382683} {((hole_inner_r + hole_outer_r)/2) * 0.923880} 0"
             euler="0 0 112.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_11" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.555570} {((hole_inner_r + hole_outer_r)/2) * 0.831470} 0"
             euler="0 0 123.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_12" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.707107} {((hole_inner_r + hole_outer_r)/2) * 0.707107} 0"
             euler="0 0 135.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_13" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.831470} {((hole_inner_r + hole_outer_r)/2) * 0.555570} 0"
             euler="0 0 146.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_14" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.923880} {((hole_inner_r + hole_outer_r)/2) * 0.382683} 0"
             euler="0 0 157.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_15" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.980785} {((hole_inner_r + hole_outer_r)/2) * 0.195090} 0"
             euler="0 0 168.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_16" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -1.000000} {((hole_inner_r + hole_outer_r)/2) * 0.000000} 0"
             euler="0 0 180.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_17" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.980785} {((hole_inner_r + hole_outer_r)/2) * -0.195090} 0"
             euler="0 0 191.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_18" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.923880} {((hole_inner_r + hole_outer_r)/2) * -0.382683} 0"
             euler="0 0 202.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_19" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.831470} {((hole_inner_r + hole_outer_r)/2) * -0.555570} 0"
             euler="0 0 213.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_20" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.707107} {((hole_inner_r + hole_outer_r)/2) * -0.707107} 0"
             euler="0 0 225.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_21" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.555570} {((hole_inner_r + hole_outer_r)/2) * -0.831470} 0"
             euler="0 0 236.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_22" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.382683} {((hole_inner_r + hole_outer_r)/2) * -0.923880} 0"
             euler="0 0 247.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_23" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.195090} {((hole_inner_r + hole_outer_r)/2) * -0.980785} 0"
             euler="0 0 258.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_24" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * -0.000000} {((hole_inner_r + hole_outer_r)/2) * -1.000000} 0"
             euler="0 0 270.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_25" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.195090} {((hole_inner_r + hole_outer_r)/2) * -0.980785} 0"
             euler="0 0 281.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_26" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.382683} {((hole_inner_r + hole_outer_r)/2) * -0.923880} 0"
             euler="0 0 292.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_27" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.555570} {((hole_inner_r + hole_outer_r)/2) * -0.831470} 0"
             euler="0 0 303.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_28" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.707107} {((hole_inner_r + hole_outer_r)/2) * -0.707107} 0"
             euler="0 0 315.0"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_29" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.831470} {((hole_inner_r + hole_outer_r)/2) * -0.555570} 0"
             euler="0 0 326.25"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_30" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.923880} {((hole_inner_r + hole_outer_r)/2) * -0.382683} 0"
             euler="0 0 337.5"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <geom name="hole_seg_31" type="box"
             pos="{((hole_inner_r + hole_outer_r)/2) * 0.980785} {((hole_inner_r + hole_outer_r)/2) * -0.195090} 0"
             euler="0 0 348.75"
             size="{((hole_inner_r + hole_outer_r)/2) * 0.098491} {(hole_outer_r - hole_inner_r) / 2} {hole_depth}"
-            rgba="0.4 0.4 0.4 1" contype="1" conaffinity="1" />
+            rgba="0.22 0.24 0.26 1" contype="1" conaffinity="1" />
       <!-- Visual inner cylinder (semi-transparent) -->
       <geom name="hole_void" type="cylinder" size="{hole_inner_r} {hole_depth + 0.001}"
-            rgba="0.1 0.1 0.1 0.2" contype="0" conaffinity="0" />
+            rgba="0.08 0.08 0.08 0.25" contype="0" conaffinity="0" />
       <!-- Success site at bottom -->
-      <site name="hole_bottom" pos="0 0 -{hole_depth}" size="0.005" rgba="0 1 0 0.5" />
+      <site name="hole_bottom" pos="0 0 -{hole_depth}" size="0.005" rgba="0 0 0 0" />
       <!-- Floor -->
       <geom name="hole_floor" type="cylinder" size="{hole_inner_r} 0.002"
             pos="0 0 -{hole_depth}"
-            rgba="0.3 0.3 0.3 1" contype="1" conaffinity="1" />
+            rgba="0.18 0.18 0.20 1" contype="1" conaffinity="1" />
     </body>
 """
 
@@ -778,19 +833,19 @@ class PickPlaceEnv:
     <body name="cabinet" pos="{cab_pos[0]} {cab_pos[1]} {cab_pos[2]}">
       <!-- Top -->
       <geom name="cab_top" type="box" size="{cab_w} {cab_d} {wall/2}"
-            pos="0 0 {cab_h}" rgba="0.55 0.35 0.2 1" contype="1" conaffinity="1" />
+            pos="0 0 {cab_h}" rgba="0.45 0.32 0.22 1" contype="1" conaffinity="1" />
       <!-- Bottom -->
       <geom name="cab_bottom" type="box" size="{cab_w} {cab_d} {wall/2}"
-            pos="0 0 -{cab_h}" rgba="0.55 0.35 0.2 1" contype="1" conaffinity="1" />
+            pos="0 0 -{cab_h}" rgba="0.45 0.32 0.22 1" contype="1" conaffinity="1" />
       <!-- Back wall -->
       <geom name="cab_back" type="box" size="{cab_w} {wall/2} {cab_h - wall}"
-            pos="0 {cab_d} 0" rgba="0.5 0.3 0.15 1" contype="1" conaffinity="1" />
+            pos="0 {cab_d} 0" rgba="0.42 0.30 0.20 1" contype="1" conaffinity="1" />
       <!-- Left wall -->
       <geom name="cab_left" type="box" size="{wall/2} {cab_d} {cab_h - wall}"
-            pos="-{cab_w} 0 0" rgba="0.5 0.3 0.15 1" contype="1" conaffinity="1" />
+            pos="-{cab_w} 0 0" rgba="0.42 0.30 0.20 1" contype="1" conaffinity="1" />
       <!-- Right wall -->
       <geom name="cab_right" type="box" size="{wall/2} {cab_d} {cab_h - wall}"
-            pos="{cab_w} 0 0" rgba="0.5 0.3 0.15 1" contype="1" conaffinity="1" />
+            pos="{cab_w} 0 0" rgba="0.42 0.30 0.20 1" contype="1" conaffinity="1" />
 
       <!-- Sliding drawer body -->
       <body name="drawer_body" pos="0 0 0">
@@ -798,38 +853,38 @@ class PickPlaceEnv:
                range="0 {slide_range}" damping="0.5" frictionloss="0.3" />
         <!-- Inner bottom -->
         <geom name="drawer_bottom" type="box" size="{inner_w} {inner_d} {wall/2}"
-              pos="0 0 -{cab_h - wall}" mass="0.1" rgba="0.6 0.4 0.2 1"
+              pos="0 0 -{cab_h - wall}" mass="0.1" rgba="0.52 0.38 0.26 1"
               contype="1" conaffinity="1" />
         <!-- Inner back -->
         <geom name="drawer_inner_back" type="box" size="{inner_w} {wall/2} {inner_h}"
-              pos="0 {inner_d} 0" mass="0.05" rgba="0.6 0.4 0.2 1"
+              pos="0 {inner_d} 0" mass="0.05" rgba="0.52 0.38 0.26 1"
               contype="1" conaffinity="1" />
         <!-- Inner left -->
         <geom name="drawer_inner_left" type="box" size="{wall/2} {inner_d} {inner_h}"
-              pos="-{inner_w} 0 0" mass="0.03" rgba="0.6 0.4 0.2 1"
+              pos="-{inner_w} 0 0" mass="0.03" rgba="0.52 0.38 0.26 1"
               contype="1" conaffinity="1" />
         <!-- Inner right -->
         <geom name="drawer_inner_right" type="box" size="{wall/2} {inner_d} {inner_h}"
-              pos="{inner_w} 0 0" mass="0.03" rgba="0.6 0.4 0.2 1"
+              pos="{inner_w} 0 0" mass="0.03" rgba="0.52 0.38 0.26 1"
               contype="1" conaffinity="1" />
         <!-- Front panel (face of drawer) -->
         <geom name="drawer_front" type="box" size="{cab_w - 0.001} {wall/2} {cab_h - 0.001}"
-              pos="0 -{cab_d} 0" mass="0.08" rgba="0.6 0.4 0.25 1"
+              pos="0 -{cab_d} 0" mass="0.08" rgba="0.50 0.36 0.24 1"
               contype="1" conaffinity="1" />
         <!-- Bar handle (horizontal, centered on front panel) -->
         <geom name="handle_bar" type="capsule" size="0.009"
               fromto="-{handle_half_len} -{cab_d + handle_offset} 0 {handle_half_len} -{cab_d + handle_offset} 0"
-              mass="0.02" rgba="0.75 0.75 0.75 1"
+              mass="0.02" rgba="0.72 0.72 0.70 1"
               contype="1" conaffinity="1" margin="0.002"
               solref="0.002 1" solimp="0.99 0.99 0.001" condim="4" friction="1.5 0.005 0.0001" />
         <!-- Handle connectors -->
         <geom name="handle_conn_l" type="cylinder" size="0.005 {handle_offset/2}"
               pos="-{handle_half_len} -{cab_d + handle_offset/2} 0" euler="1.5708 0 0"
-              rgba="0.75 0.75 0.75 1" contype="1" conaffinity="1" />
+              rgba="0.72 0.72 0.70 1" contype="1" conaffinity="1" />
         <geom name="handle_conn_r" type="cylinder" size="0.005 {handle_offset/2}"
               pos="{handle_half_len} -{cab_d + handle_offset/2} 0" euler="1.5708 0 0"
-              rgba="0.75 0.75 0.75 1" contype="1" conaffinity="1" />
-        <site name="drawer_handle_site" pos="0 -{cab_d + handle_offset} 0" size="0.005" rgba="1 1 0 0.5" />
+              rgba="0.72 0.72 0.70 1" contype="1" conaffinity="1" />
+        <site name="drawer_handle_site" pos="0 -{cab_d + handle_offset} 0" size="0.005" rgba="0 0 0 0" />
       </body>
     </body>
 """
@@ -843,12 +898,12 @@ class PickPlaceEnv:
 
             # Inject faucet materials into <asset> section
             faucet_materials = """
-    <material name="faucet_chrome" rgba="0.75 0.78 0.82 1"
-              specular="0.9" shininess="0.95" reflectance="0.5" />
-    <material name="faucet_dark" rgba="0.30 0.32 0.35 1"
-              specular="0.8" shininess="0.9" reflectance="0.4" />
-    <material name="faucet_highlight" rgba="0.85 0.87 0.90 1"
-              specular="0.95" shininess="0.98" reflectance="0.6" />
+    <material name="faucet_chrome" rgba="0.82 0.80 0.76 1"
+              specular="0.8" shininess="0.88" reflectance="0.35" />
+    <material name="faucet_dark" rgba="0.55 0.53 0.50 1"
+              specular="0.6" shininess="0.7" reflectance="0.2" />
+    <material name="faucet_highlight" rgba="0.90 0.88 0.84 1"
+              specular="0.85" shininess="0.92" reflectance="0.4" />
 """
             asset_close_idx = xml.rfind("</asset>")
             if asset_close_idx >= 0:
@@ -910,7 +965,7 @@ class PickPlaceEnv:
               solref="0.002 1" solimp="0.99 0.99 0.001" condim="4" friction="2.0 0.1 0.01" />
         <!-- Target site at lever tip -->
         <site name="faucet_handle_site" pos="0 {-0.065*s} {0.016*s}"
-              size="0.004" rgba="0 1 0 0.3" />
+              size="0.004" rgba="0 0 0 0" />
       </body>
     </body>
 """
@@ -924,7 +979,7 @@ class PickPlaceEnv:
     <body name="door_frame" pos="{dpos[0]} {dpos[1]} {dpos[2]}">
       <!-- Frame post (hinge side) -->
       <geom name="door_frame_post" type="box" size="{0.010*ds} {0.010*ds} {0.080*ds}"
-            pos="{-0.080*ds} 0 {0.080*ds}" rgba="0.40 0.35 0.30 1"
+            pos="{-0.080*ds} 0 {0.080*ds}" rgba="0.35 0.32 0.28 1"
             contype="1" conaffinity="1"/>
       <!-- Door panel (rotates around Z hinge) -->
       <body name="door_panel" pos="{-0.080*ds} 0 {0.080*ds}">
@@ -932,19 +987,19 @@ class PickPlaceEnv:
                range="0 1.57" damping="2" stiffness="0"/>
         <geom name="door_panel_geom" type="box"
               size="{0.075*ds} {0.005*ds} {0.075*ds}"
-              pos="{0.075*ds} 0 0" rgba="0.85 0.80 0.70 1"
+              pos="{0.075*ds} 0 0" rgba="0.92 0.89 0.82 1"
               contype="1" conaffinity="1"/>
         <!-- Door handle (L-shaped lever, horizontal) -->
         <body name="door_handle_body" pos="{0.120*ds} {-0.025*ds} 0">
           <!-- Handle stem (sticks out from panel toward robot) -->
           <geom name="door_handle_stem" type="capsule" size="{0.006*ds}"
                 fromto="0 0 0 0 {-0.045*ds} 0"
-                rgba="0.85 0.65 0.10 1"
+                rgba="0.78 0.62 0.22 1"
                 contype="1" conaffinity="1"/>
           <!-- Handle bar (extends horizontally along X from stem tip - L shape) -->
           <geom name="door_handle_geom" type="capsule" size="{0.007*ds}"
                 fromto="0 {-0.045*ds} 0 {-0.045*ds} {-0.045*ds} 0"
-                rgba="0.85 0.65 0.10 1"
+                rgba="0.78 0.62 0.22 1"
                 contype="1" conaffinity="1"
                 solref="0.005 1" solimp="0.99 0.99 0.001" condim="4" friction="1 0.005 0.0001"/>
           <site name="door_handle_site" pos="{-0.020*ds} {-0.045*ds} 0" size="0.002"/>
@@ -962,9 +1017,9 @@ class PickPlaceEnv:
     <body name="cube_b" pos="{cube_b_pos[0]} {cube_b_pos[1]} {cube_b_pos[2]}">
       <freejoint name="cube_b_joint" />
       <geom name="cube_b_geom" type="box" size="{cfg.cube_size} {cfg.cube_size} {cfg.cube_size}"
-            mass="{cfg.cube_mass}" rgba="0.1 0.1 0.9 1" condim="4"
-            friction="1.0 0.005 0.0001" contype="1" conaffinity="1"
-            solref="0.02 1" solimp="0.9 0.95 0.001 0.5 2" />
+            mass="{cfg.cube_mass}" rgba="0.18 0.28 0.72 1" condim="4"
+            friction="1.5 0.005 0.0001" contype="1" conaffinity="1"
+            solref="0.005 1" solimp="0.95 0.99 0.001" margin="0.002" />
     </body>
 """
         # Inject before the LAST </worldbody> (after inlining there may be multiple)
@@ -997,6 +1052,16 @@ class PickPlaceEnv:
             for i in range(self.cfg.gripper_actuator_idx):
                 self.model.actuator_forcerange[i] = [-50.0, 50.0]
             self.model.actuator_forcerange[self.cfg.gripper_actuator_idx] = [-5.0, 5.0]
+
+        # Lite6: fix finger geom contact params (menagerie ships with invalid
+        # solimp=[2,1,...] which breaks contact force generation)
+        if self.robot_name == "lite6":
+            for name in ("gripper_left_finger", "gripper_right_finger"):
+                gid = mujoco.mj_name2id(self.model, mujoco.mjtObj.mjOBJ_GEOM, name)
+                if gid >= 0:
+                    self.model.geom_solref[gid] = [0.004, 1.0]
+                    self.model.geom_solimp[gid] = [0.95, 0.99, 0.001, 0.5, 2.0]
+
 
         # --- Post-load physics standardization ---
         # Ensure consistent timestep, solver iterations, and friction cone
@@ -1285,11 +1350,11 @@ class PickPlaceEnv:
 
         # Camera
         self._cam_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_CAMERA, "overhead_cam"
+            self.model, mujoco.mjtObj.mjOBJ_CAMERA, "agentview_0"
         )
         if self._cam_id < 0:
             # Try other camera names from menagerie scenes
-            for cam_name in ["overhead", "fixed"]:
+            for cam_name in ["overhead_cam", "overhead", "fixed"]:
                 self._cam_id = mujoco.mj_name2id(
                     self.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name
                 )
@@ -1794,19 +1859,21 @@ class PickPlaceEnv:
         dist_xy = np.linalg.norm(peg_pos[:2] - hole_body_pos[:2])
         inside_xy = dist_xy < hole_inner_r
 
-        # Z: peg center must be at or below hole top (within 2mm tolerance)
-        inserted_z = peg_pos[2] < hole_body_pos[2] + 0.002
+        # Z: peg center must be below hole rim (hole_body_center + hole_depth)
+        # This means peg is at least partially inside the hole cavity
+        hole_depth = cfg.hole_depth
+        inserted_z = peg_pos[2] < hole_body_pos[2] + hole_depth - 0.005
 
         return inside_xy and inserted_z
 
 
     def _check_drawer_open_success(self) -> bool:
-        """Check if drawer is pulled open past 80% of its range."""
+        """Check if drawer is pulled open past 70% of its range."""
         try:
             joint_id = self.model.joint("drawer_joint").id
             qpos_idx = self.model.jnt_qposadr[joint_id]
             drawer_pos = self.data.qpos[qpos_idx]
-            target = self.cfg.drawer_slide_range * 0.8
+            target = self.cfg.drawer_slide_range * 0.7
             return drawer_pos >= target
         except Exception:
             return False

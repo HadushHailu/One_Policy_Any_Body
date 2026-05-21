@@ -14,11 +14,17 @@ from opab.env.base_env import PickPlaceEnv
 
 Path("videos").mkdir(exist_ok=True)
 
-# Shared camera settings
-CAM_LOOKAT = [0.25, 0.0, 0.45]
-CAM_DISTANCE = 0.75
-CAM_AZIMUTH = 145
-CAM_ELEVATION = -20
+# ---------------------------------------------------------------
+# Camera configurations
+# ---------------------------------------------------------------
+# Per-robot camera params are stored in env.cfg.cameras
+# Fallback sideview_0 (used if cfg doesn't have cameras dict)
+SIDEVIEW_0_FALLBACK = {
+    "lookat": [0.15, 0.0, 0.45],
+    "distance": 0.70,
+    "azimuth": 150,
+    "elevation": -22,
+}
 
 
 def make_env(task):
@@ -27,17 +33,29 @@ def make_env(task):
     return env
 
 
-def make_video(env, task):
+def make_video(env, task, cam_name="sideview_0"):
     renderer = mujoco.Renderer(env.model, 480, 640)
     cam = mujoco.MjvCamera()
-    cam.type = mujoco.mjtCamera.mjCAMERA_FREE
-    cam.lookat[:] = CAM_LOOKAT
-    cam.distance = CAM_DISTANCE
-    cam.azimuth = CAM_AZIMUTH
-    cam.elevation = CAM_ELEVATION
+
+    # Get per-robot camera config
+    robot_cameras = getattr(env.cfg, 'cameras', {})
+
+    if cam_name == "sideview_0":
+        cam_cfg = robot_cameras.get("sideview_0", SIDEVIEW_0_FALLBACK)
+        cam.type = mujoco.mjtCamera.mjCAMERA_FREE
+        cam.lookat[:] = cam_cfg["lookat"]
+        cam.distance = cam_cfg["distance"]
+        cam.azimuth = cam_cfg["azimuth"]
+        cam.elevation = cam_cfg["elevation"]
+    else:
+        # Use a fixed camera from the XML (agentview_0, topdown_0, etc.)
+        cam.type = mujoco.mjtCamera.mjCAMERA_FIXED
+        cam.fixedcamid = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_CAMERA, cam_name)
+        if cam.fixedcamid < 0:
+            raise ValueError(f"Camera '{cam_name}' not found in model")
 
     fourcc = cv2.VideoWriter_fourcc(*'mp4v')
-    path = f'videos/lite6_{task}.mp4'
+    path = f'videos/lite6_{cam_name}_{task}.mp4'
     out = cv2.VideoWriter(path, fourcc, 30, (640, 480))
 
     ee_sid = mujoco.mj_name2id(env.model, mujoco.mjtObj.mjOBJ_SITE, 'end_effector')
@@ -79,17 +97,20 @@ def make_video(env, task):
         cube_pos = env.get_cube_pos()
         target_pos = env.get_target_pos()
         # Approach above cube
-        move_to(cube_pos + [0, 0, 0.05], steps=20)
-        # Lower to cube
-        move_to(cube_pos + [0, 0, 0.005], steps=15)
+        move_to(cube_pos + [0, 0, 0.05], steps=25)
+        # Lower so finger pads grip cube (palm stays above cube top)
+        # EE at cube-5mm keeps palm ~4mm above cube top (palm is ~27mm above EE)
+        move_to(cube_pos + [0, 0, -0.005], steps=25)
         # Grasp
         grip_close(10)
         # Lift
         move_to(cube_pos + [0, 0, 0.08], steps=15, grip=1.0)
         # Move to target
         move_to(target_pos + [0, 0, 0.06], steps=20, grip=1.0)
-        # Lower
-        move_to(target_pos + [0, 0, 0.005], steps=15, grip=1.0)
+        # Lower to place (stop above table, release, gravity settles)
+        # target_pos z is site height (0.405), cube rests at table_top+cube_size (0.418)
+        # EE needs to be ~0.013 above target_pos for gentle drop
+        move_to(target_pos + [0, 0, 0.013], steps=20, grip=1.0)
         # Release
         grip_open(8)
         # Retract
@@ -98,33 +119,49 @@ def make_video(env, task):
     elif task == "push":
         cube_pos = env.get_cube_pos()
         target_pos = env.get_target_pos()
-        # Approach behind cube (in +Y since target is at -Y)
-        behind = cube_pos + [0, 0.03, 0.0]
-        move_to(behind + [0, 0, 0.04], steps=15)
-        move_to(behind, steps=15)
-        # Push toward target
+        cs = env.cfg.cube_size
+        # Push direction: cube -> target (purely -Y for lite6)
         push_dir = (target_pos[:2] - cube_pos[:2])
-        push_dir = push_dir / (np.linalg.norm(push_dir) + 1e-8)
-        for i in range(40):
-            env.step(np.array([push_dir[0]*0.006, push_dir[1]*0.006, 0.0, 0.0, 0.0]))
+        push_dist = np.linalg.norm(push_dir)
+        push_dir = push_dir / (push_dist + 1e-8)
+        # "Behind" = opposite side of push direction
+        behind_offset = 0.04  # 4cm behind cube center
+        behind_xy = cube_pos[:2] - push_dir * behind_offset
+        # Contact height: raise EE above cube center so palm clears cube top
+        # Palm visual bottom is ~27mm above EE; cube top is at cube_pos[2]+cs
+        # EE at cube_pos[2]+0.008 → palm bottom ~17mm above cube top (clean gap)
+        contact_z = cube_pos[2] + 0.008
+        # Close gripper first (use closed fingers as pusher)
+        grip_close(5)
+        # Approach behind cube from above (more steps to ensure convergence)
+        move_to(np.array([behind_xy[0], behind_xy[1], contact_z + 0.05]), steps=25, grip=1.0)
+        # Lower to push height (more steps for reliable descent)
+        move_to(np.array([behind_xy[0], behind_xy[1], contact_z]), steps=25, grip=1.0)
+        # Push toward target (compute exact distance to avoid overshoot)
+        # From behind position to target = behind_offset + push_dist - cs (stop when cube center reaches target)
+        total_push = behind_offset + push_dist - cs
+        step_size = 0.005
+        n_push_steps = int(total_push / step_size)
+        for i in range(n_push_steps):
+            env.step(np.array([push_dir[0]*step_size, push_dir[1]*step_size, 0.0, 0.0, 1.0]))
             render()
         # Retract up
-        move_to(ee_pos() + [0, 0, 0.05], steps=10)
+        move_to(ee_pos() + [0, 0, 0.05], steps=10, grip=1.0)
 
     elif task == "stack":
         cube_a_pos = env.get_cube_pos()
         cube_b_pos = env.get_cube_b_pos()
         cs = env.cfg.cube_size
-        # Pick cube_A
-        move_to(cube_a_pos + [0, 0, 0.05], steps=20)
-        move_to(cube_a_pos + [0, 0, 0.005], steps=15)
+        # Pick cube_A (EE at cube-5mm: palm stays above cube top)
+        move_to(cube_a_pos + [0, 0, 0.05], steps=25)
+        move_to(cube_a_pos + [0, 0, -0.005], steps=25)
         grip_close(10)
         move_to(cube_a_pos + [0, 0, 0.08], steps=15, grip=1.0)
         # Move above cube_B
-        stack_target = cube_b_pos + [0, 0, 2*cs + 0.04]
+        stack_target = cube_b_pos + [0, 0, 2*cs + 0.06]
         move_to(stack_target, steps=20, grip=1.0)
-        # Lower onto cube_B
-        move_to(cube_b_pos + [0, 0, 2*cs + 0.005], steps=15, grip=1.0)
+        # Lower cube_A onto cube_B (stop just above so arm doesn't push down)
+        move_to(cube_b_pos + [0, 0, 2*cs + 0.003], steps=20, grip=1.0)
         # Release
         grip_open(8)
         # Retract
@@ -145,9 +182,13 @@ def make_video(env, task):
             d = np.clip((high_above_hole - ee_pos()) * 0.3, -0.005, 0.005)
             env.step(np.array([d[0], d[1], d[2], 0.0, 1.0]))
             render()
-        # Descend close to hole opening before releasing
+        # Descend to just above hole opening — keep fingers clear of socket walls
+        # hole_pos is at hole BOTTOM; hole rim top = hole_body_center + hole_depth
+        # hole_body_center = hole_pos + hole_depth; rim = hole_pos + 2*hole_depth
+        # EE at rim + 0.005 keeps fingertips 5mm above socket walls
+        hole_depth = env.cfg.hole_depth
         for s in range(35):
-            target = hole_pos + np.array([0, 0, 0.015])
+            target = hole_pos + np.array([0, 0, 2*hole_depth + 0.005])
             d = np.clip((target - ee_pos()) * 0.3, -0.003, 0.003)
             env.step(np.array([d[0], d[1], d[2], 0.0, 1.0]))
             render()
@@ -291,15 +332,24 @@ def make_video(env, task):
 # Main: record all tasks
 # ---------------------------------------------------------------
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--robot", default="lite6")
+    parser.add_argument("--task", default=None)
+    parser.add_argument("--episodes", type=int, default=1)
+    parser.add_argument("--cam", default="sideview_0",
+                        help="Camera name: sideview_0 (free), agentview_0, topdown_0")
+    args = parser.parse_args()
+
     tasks = ["pick_place", "push", "stack", "peg_insertion",
              "drawer_open", "turn_faucet", "door_open"]
 
     for task in tasks:
         print(f"\n{'='*50}")
-        print(f"Recording: {task}")
+        print(f"Recording: {task} [{args.cam}]")
         print(f"{'='*50}")
         env = make_env(task)
-        path = make_video(env, task)
+        path = make_video(env, task, cam_name=args.cam)
         env.close()
         print(f"  -> {path}")
 
