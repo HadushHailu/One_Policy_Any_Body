@@ -74,7 +74,7 @@ class RobotConfig:
             # Camera parameters (per-robot)
             self.cameras = {
                 "sideview_0": {"lookat": [0.30, 0.0, 0.50], "distance": 0.85, "azimuth": 150, "elevation": -22},
-                "agentview_0": {"pos": [0.25, 0.0, 1.3], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "agentview_0": {"pos": [0.05, 0.0, 1.3], "xyaxes": "0 -1 0 0.906 0 0.423", "fovy": 60},
                 "topdown_0": {"pos": [0.25, 0.0, 1.3], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
             }
             # Peg insertion parameters
@@ -140,7 +140,7 @@ class RobotConfig:
             # Camera parameters (per-robot)
             self.cameras = {
                 "sideview_0": {"lookat": [0.30, 0.0, 0.50], "distance": 0.85, "azimuth": 150, "elevation": -22},
-                "agentview_0": {"pos": [0.30, 0.0, 1.3], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "agentview_0": {"pos": [0.05, 0.0, 1.3], "xyaxes": "0 -1 0 0.906 0 0.423", "fovy": 60},
                 "topdown_0": {"pos": [0.30, 0.0, 1.3], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
             }
             # Peg insertion parameters
@@ -200,7 +200,7 @@ class RobotConfig:
             # Camera parameters (per-robot)
             self.cameras = {
                 "sideview_0": {"lookat": [0.18, 0.0, 0.45], "distance": 0.75, "azimuth": 150, "elevation": -22},
-                "agentview_0": {"pos": [0.15, 0.0, 1.2], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "agentview_0": {"pos": [-0.12, 0.0, 1.2], "xyaxes": "0 -1 0 0.906 0 0.423", "fovy": 60},
                 "topdown_0": {"pos": [0.15, 0.0, 1.2], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
             }
             # Peg insertion parameters
@@ -260,7 +260,7 @@ class RobotConfig:
             # Camera parameters (per-robot)
             self.cameras = {
                 "sideview_0": {"lookat": [0.15, 0.0, 0.45], "distance": 0.70, "azimuth": 150, "elevation": -22},
-                "agentview_0": {"pos": [0.20, 0.0, 1.2], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "agentview_0": {"pos": [-0.05, 0.0, 1.2], "xyaxes": "0 -1 0 0.906 0 0.423", "fovy": 60},
                 "topdown_0": {"pos": [0.20, 0.0, 1.2], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
             }
             # Peg insertion parameters
@@ -323,7 +323,7 @@ class RobotConfig:
             # Camera parameters (per-robot)
             self.cameras = {
                 "sideview_0": {"lookat": [0.12, 0.0, 0.28], "distance": 0.50, "azimuth": 150, "elevation": -22},
-                "agentview_0": {"pos": [0.10, 0.0, 0.7], "xyaxes": "0 -1 0 0.966 0 0.259", "fovy": 60},
+                "agentview_0": {"pos": [-0.05, 0.0, 0.7], "xyaxes": "0 -1 0 0.906 0 0.423", "fovy": 60},
                 "topdown_0": {"pos": [0.10, 0.0, 0.7], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
             }
             # Peg insertion parameters
@@ -571,10 +571,10 @@ class PickPlaceEnv:
             friction="1.0 0.005 0.0001" />
     </body>
 
-    <camera name="agentview_0" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
-            xyaxes="0 -1 0 0.966 0 0.259" fovy="60" />
-    <camera name="topdown_0" pos="{cfg.cam_pos[0]} {cfg.cam_pos[1]} {cfg.cam_pos[2]}"
-            xyaxes="1 0 0 0 1 0" fovy="60" />
+    <camera name="agentview_0" pos="{cfg.cameras['agentview_0']['pos'][0]} {cfg.cameras['agentview_0']['pos'][1]} {cfg.cameras['agentview_0']['pos'][2]}"
+            xyaxes="{cfg.cameras['agentview_0']['xyaxes']}" fovy="{cfg.cameras['agentview_0']['fovy']}" />
+    <camera name="topdown_0" pos="{cfg.cameras['topdown_0']['pos'][0]} {cfg.cameras['topdown_0']['pos'][1]} {cfg.cameras['topdown_0']['pos'][2]}"
+            xyaxes="{cfg.cameras['topdown_0']['xyaxes']}" fovy="{cfg.cameras['topdown_0']['fovy']}" />
     <camera name="sideview_0" pos="{cfg.cam_pos[0] + 0.6} {cfg.cam_pos[1] - 0.5} {cfg.cam_pos[2] - 0.4}"
             xyaxes="0.64 0.77 0 -0.41 0.35 0.84" fovy="45" />
 """
