@@ -2,8 +2,19 @@
 OPAB environment package.
 
 Provides unified manipulation environments for multiple robot embodiments.
+
+Architecture (v2 — modular):
+  - opab.robots/  — per-robot config + gripper control + XML patches
+  - opab.tasks/   — per-task object XML + success checks
+  - opab.placement/ — robot×task placement matrix
+  - opab.env.ik_solver  — standalone DLS IK
+  - opab.env.modular_env — thin orchestrator (ManipulationEnv)
+
+The original monolithic base_env.py is preserved for reference.
+All public imports route through the modular implementation.
 """
-from opab.env.base_env import PickPlaceEnv, RobotConfig
+from opab.env.modular_env import ManipulationEnv, ManipulationEnv as PickPlaceEnv
+from opab.env.base_env import RobotConfig  # backwards compat for scripts reading RobotConfig
 from opab.env.scripted_policies import (
     ScriptedPickPlace, ScriptedStack, ScriptedReach, ScriptedPush, ScriptedPegInsertion
 )
@@ -11,15 +22,20 @@ from opab.env.domain_randomization import DomainRandomizer, DRConfig
 
 
 SUPPORTED_ROBOTS = ("franka", "ur5", "widowx", "lite6", "so101")
-SUPPORTED_TASKS = ("reach", "pick_place", "push", "stack", "peg_insertion")
+SUPPORTED_TASKS = (
+    "pick_place", "push", "stack", "peg_insertion",
+    "drawer_open", "turn_faucet", "door_open",
+)
 
 # Task name → integer ID mapping (used in HDF5 and by TaskEncoder)
 TASK_ID_MAP = {
-    "reach": 0,
-    "pick_place": 1,
-    "push": 2,
-    "stack": 3,
-    "peg_insertion": 4,
+    "pick_place": 0,
+    "push": 1,
+    "stack": 2,
+    "peg_insertion": 3,
+    "drawer_open": 4,
+    "turn_faucet": 5,
+    "door_open": 6,
 }
 
 
@@ -31,9 +47,9 @@ def make_env(
     seed: int | None = None,
     domain_randomization: bool = False,
     task: str = "pick_place",
-) -> PickPlaceEnv:
+) -> ManipulationEnv:
     """
-    Factory function — creates a PickPlaceEnv for the specified robot.
+    Factory function — creates a ManipulationEnv for the specified robot and task.
 
     Args:
         robot: One of 'franka', 'ur5', 'widowx', 'lite6', 'so101'
@@ -41,11 +57,11 @@ def make_env(
         control_freq: Control loop frequency (Hz)
         max_episode_steps: Episode length limit
         seed: RNG seed for reproducibility
-        domain_randomization: Enable DR (default off for Week 1)
-        task: One of 'pick_place', 'stack'
+        domain_randomization: Enable DR
+        task: One of the SUPPORTED_TASKS
 
     Returns:
-        PickPlaceEnv instance ready for reset()/step()
+        ManipulationEnv instance ready for reset()/step()
     """
     if robot not in SUPPORTED_ROBOTS:
         raise ValueError(
@@ -56,7 +72,7 @@ def make_env(
             f"Unknown task '{task}'. Supported: {SUPPORTED_TASKS}"
         )
 
-    env = PickPlaceEnv(
+    env = ManipulationEnv(
         robot=robot,
         image_size=image_size,
         control_freq=control_freq,
@@ -74,6 +90,7 @@ def make_env(
 
 __all__ = [
     "make_env",
+    "ManipulationEnv",
     "PickPlaceEnv",
     "RobotConfig",
     "ScriptedPickPlace",
