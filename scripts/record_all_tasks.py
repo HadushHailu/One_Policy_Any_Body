@@ -137,14 +137,24 @@ def make_video(env, task):
         move_to(peg_pos + [0, 0, 0.05], steps=20)
         move_to(peg_pos + [0, 0, 0.003], steps=15)
         grip_close(10)
-        # Lift peg
-        move_to(peg_pos + [0, 0, 0.06], steps=15, grip=1.0)
-        # Move above hole
-        move_to(hole_pos + [0, 0, 0.04], steps=20, grip=1.0)
-        # Insert (lower into hole)
-        move_to(hole_pos + [0, 0, -0.01], steps=25, grip=1.0)
-        # Release
-        grip_open(8)
+        # Lift peg high (clear of hole height)
+        move_to(peg_pos + [0, 0, 0.10], steps=25, grip=1.0)
+        # Move XY to above hole at same high Z — slow transport
+        high_above_hole = np.array([hole_pos[0], hole_pos[1], ee_pos()[2]])
+        for s in range(50):
+            d = np.clip((high_above_hole - ee_pos()) * 0.3, -0.005, 0.005)
+            env.step(np.array([d[0], d[1], d[2], 0.0, 1.0]))
+            render()
+        # Descend close to hole opening before releasing
+        for s in range(35):
+            target = hole_pos + np.array([0, 0, 0.015])
+            d = np.clip((target - ee_pos()) * 0.3, -0.003, 0.003)
+            env.step(np.array([d[0], d[1], d[2], 0.0, 1.0]))
+            render()
+        # Release peg — tip is already inside/at hole opening
+        grip_open(5)
+        # Wait for peg to settle into hole
+        idle(30)
         # Retract
         move_to(ee_pos() + [0, 0, 0.05], steps=10)
 

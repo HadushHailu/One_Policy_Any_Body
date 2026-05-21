@@ -567,8 +567,9 @@ class PickPlaceEnv:
     <body name="peg" pos="{peg_pos[0]} {peg_pos[1]} {peg_pos[2]}">
       <freejoint name="peg_joint" />
       <geom name="peg_geom" type="cylinder" size="{peg_r} {peg_hl}"
-            mass="0.02" rgba="0.2 0.6 0.9 1" condim="6"
-            friction="2.0 0.1 0.01" contype="1" conaffinity="1" />
+            mass="0.02" rgba="0.2 0.6 0.9 1" condim="4"
+            friction="0.5 0.005 0.0001" contype="1" conaffinity="1"
+            solref="0.005 1" solimp="0.95 0.99 0.001" />
     </body>
 
     <body name="hole_body" pos="{hole_pos[0]} {hole_pos[1]} {hole_pos[2]}">
