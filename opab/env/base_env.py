@@ -85,18 +85,9 @@ class RobotConfig:
             self.faucet_pos = np.array([0.45, -0.10, 0.42])
             self.faucet_scale = 1.0
             self.faucet_target_angle = -1.2  # radians (~70 degrees)
-            # Button press parameters
-            self.button_pos = np.array([0.45, 0.10, 0.42])
-            self.button_scale = 1.0
             # Door open parameters
             self.door_pos = np.array([0.50, 0.15, 0.42])
             self.door_scale = 1.0
-            # Lever pull parameters
-            self.lever_pos = np.array([0.45, 0.15, 0.42])
-            self.lever_scale = 1.0
-            # Sweep parameters
-            self.sweep_obj_pos = np.array([0.45, 0.0, 0.42])
-            self.sweep_target_pos = np.array([0.45, -0.25, 0.405])
 
         elif name == "ur5":
             self.scene_path = kwargs.get("scene_path",
@@ -154,18 +145,9 @@ class RobotConfig:
             self.faucet_pos = np.array([0.40, -0.15, 0.42])
             self.faucet_scale = 1.0
             self.faucet_target_angle = -1.2
-            # Button press parameters
-            self.button_pos = np.array([0.40, 0.10, 0.42])
-            self.button_scale = 1.0
             # Door open parameters
             self.door_pos = np.array([0.45, 0.15, 0.42])
             self.door_scale = 1.0
-            # Lever pull parameters
-            self.lever_pos = np.array([0.40, 0.15, 0.42])
-            self.lever_scale = 1.0
-            # Sweep parameters
-            self.sweep_obj_pos = np.array([0.40, 0.0, 0.42])
-            self.sweep_target_pos = np.array([0.40, -0.25, 0.405])
 
         elif name == "widowx":
             self.scene_path = kwargs.get("scene_path",
@@ -217,18 +199,9 @@ class RobotConfig:
             self.faucet_pos = np.array([0.22, -0.06, 0.42])
             self.faucet_scale = 0.9
             self.faucet_target_angle = -1.2
-            # Button press parameters
-            self.button_pos = np.array([0.22, 0.06, 0.065])
-            self.button_scale = 0.75
             # Door open parameters
             self.door_pos = np.array([0.28, 0.08, 0.065])
             self.door_scale = 0.75
-            # Lever pull parameters
-            self.lever_pos = np.array([0.22, 0.08, 0.065])
-            self.lever_scale = 0.75
-            # Sweep parameters
-            self.sweep_obj_pos = np.array([0.22, 0.0, 0.065])
-            self.sweep_target_pos = np.array([0.22, -0.12, 0.055])
 
         elif name == "lite6":
             self.scene_path = kwargs.get("scene_path",
@@ -246,8 +219,8 @@ class RobotConfig:
             self.action_scale = 0.01
             self.ik_damping = 0.01
             self.ik_max_iter = 50
-            self.gripper_open = -10.0   # motor ctrl=-10 -> open (push fingers apart)
-            self.gripper_closed = 10.0   # motor ctrl=+10 -> close (push fingers together)
+            self.gripper_open = -0.025   # position ctrl=-0.025 -> fingers fully open
+            self.gripper_closed = -0.00001  # position ctrl~0 -> fingers fully closed
             # Home pose: arm reaching forward and down
             self.home_qpos = {
                 "joint1": 0.0, "joint2": 0.0, "joint3": 1.57,
@@ -280,18 +253,9 @@ class RobotConfig:
             self.faucet_pos = np.array([0.30, -0.08, 0.42])
             self.faucet_scale = 1.0
             self.faucet_target_angle = -1.2
-            # Button press parameters
-            self.button_pos = np.array([0.30, 0.08, 0.41])
-            self.button_scale = 0.85
             # Door open parameters
             self.door_pos = np.array([0.35, 0.12, 0.41])
             self.door_scale = 0.85
-            # Lever pull parameters
-            self.lever_pos = np.array([0.30, 0.12, 0.41])
-            self.lever_scale = 0.85
-            # Sweep parameters
-            self.sweep_obj_pos = np.array([0.30, 0.0, 0.41])
-            self.sweep_target_pos = np.array([0.30, -0.15, 0.41])
 
         elif name == "so101":
             self.scene_path = kwargs.get("scene_path",
@@ -346,18 +310,9 @@ class RobotConfig:
             self.faucet_pos = np.array([0.18, -0.06, 0.22])
             self.faucet_scale = 0.7
             self.faucet_target_angle = -1.2
-            # Button press parameters
-            self.button_pos = np.array([0.18, 0.06, 0.021])
-            self.button_scale = 0.60
             # Door open parameters
             self.door_pos = np.array([0.22, 0.08, 0.021])
             self.door_scale = 0.60
-            # Lever pull parameters
-            self.lever_pos = np.array([0.18, 0.08, 0.021])
-            self.lever_scale = 0.60
-            # Sweep parameters
-            self.sweep_obj_pos = np.array([0.18, 0.0, 0.021])
-            self.sweep_target_pos = np.array([0.18, -0.10, 0.015])
         else:
             raise ValueError(f"Unknown robot: {name}")
 
@@ -378,7 +333,12 @@ class PickPlaceEnv:
 
     Tasks:
       - 'pick_place': pick cube_A, place at target zone (default)
+      - 'push': push cube to target zone
       - 'stack': pick cube_A, stack on top of cube_B
+      - 'peg_insertion': pick peg, insert into hole
+      - 'drawer_open': pull drawer open
+      - 'turn_faucet': rotate faucet handle
+      - 'door_open': grip handle bar, pull door open
     """
 
     def __init__(
@@ -572,14 +532,7 @@ class PickPlaceEnv:
 """
 
         # Task-specific objects
-        if self.task == "reach":
-            # Reach: just a target sphere, no cube needed
-            objects += f"""
-    <site name="reach_target" pos="{cfg.target_pos[0]} {cfg.target_pos[1]} {cfg.target_pos[2] + 0.05}"
-          size="0.02" rgba="0.9 0.2 0.2 0.8" type="sphere" />
-"""
-
-        elif self.task in ("pick_place", "push", "stack"):
+        if self.task in ("pick_place", "push", "stack"):
             # These tasks need a cube
             objects += f"""
     <body name="cube" pos="{cfg.cube_pos[0]} {cfg.cube_pos[1]} {cfg.cube_pos[2]}">
@@ -806,8 +759,9 @@ class PickPlaceEnv:
             slide_range = cfg.drawer_slide_range
             
             # Position: cabinet sits on table, open face toward robot (-Y)
+            # Add 0.01 to clear the table surface geom (half-height 0.01)
             cab_pos = cfg.drawer_pos.copy()
-            cab_pos[2] = table_top_z + cab_h
+            cab_pos[2] = table_top_z + 0.01 + cab_h
             
             # Inner drawer dimensions
             inner_w = cab_w - wall - 0.001
@@ -840,7 +794,7 @@ class PickPlaceEnv:
       <!-- Sliding drawer body -->
       <body name="drawer_body" pos="0 0 0">
         <joint name="drawer_joint" type="slide" axis="0 -1 0"
-               range="0 {slide_range}" damping="0.5" frictionloss="0.1" />
+               range="0 {slide_range}" damping="0.5" frictionloss="0.3" />
         <!-- Inner bottom -->
         <geom name="drawer_bottom" type="box" size="{inner_w} {inner_d} {wall/2}"
               pos="0 0 -{cab_h - wall}" mass="0.1" rgba="0.6 0.4 0.2 1"
@@ -862,10 +816,11 @@ class PickPlaceEnv:
               pos="0 -{cab_d} 0" mass="0.08" rgba="0.6 0.4 0.25 1"
               contype="1" conaffinity="1" />
         <!-- Bar handle (horizontal, centered on front panel) -->
-        <geom name="handle_bar" type="capsule" size="0.006"
+        <geom name="handle_bar" type="capsule" size="0.009"
               fromto="-{handle_half_len} -{cab_d + handle_offset} 0 {handle_half_len} -{cab_d + handle_offset} 0"
-              mass="0.02" rgba="0.75 0.75 0.75 1" condim="6"
-              friction="2.0 0.1 0.01" contype="1" conaffinity="1" />
+              mass="0.02" rgba="0.75 0.75 0.75 1"
+              contype="1" conaffinity="1" margin="0.002"
+              solref="0.002 1" solimp="0.99 0.99 0.001" condim="4" friction="1.5 0.005 0.0001" />
         <!-- Handle connectors -->
         <geom name="handle_conn_l" type="cylinder" size="0.005 {handle_offset/2}"
               pos="-{handle_half_len} -{cab_d + handle_offset/2} 0" euler="1.5708 0 0"
@@ -945,41 +900,17 @@ class PickPlaceEnv:
         <geom name="faucet_lever" type="capsule" size="{0.006*s}"
               fromto="0 0 {0.005*s}  0 {-0.060*s} {0.015*s}"
               material="faucet_highlight" mass="0.03"
-              contype="1" conaffinity="1" friction="2.0 0.1 0.01" />
+              contype="1" conaffinity="1" margin="0.002"
+              solref="0.002 1" solimp="0.99 0.99 0.001" condim="4" friction="2.0 0.1 0.01" />
         <!-- Grip ball at lever tip -->
         <geom name="faucet_grip" type="sphere" size="{0.009*s}"
               pos="0 {-0.065*s} {0.016*s}" material="faucet_highlight" mass="0.02"
-              contype="1" conaffinity="1" friction="2.0 0.1 0.01" />
+              contype="1" conaffinity="1" margin="0.002"
+              solref="0.002 1" solimp="0.99 0.99 0.001" condim="4" friction="2.0 0.1 0.01" />
         <!-- Target site at lever tip -->
         <site name="faucet_handle_site" pos="0 {-0.065*s} {0.016*s}"
               size="0.004" rgba="0 1 0 0.3" />
       </body>
-    </body>
-"""
-
-        elif self.task == "button_press":
-            # Button press: housing box with cylindrical plunger (topdown press)
-            bpos = cfg.button_pos
-            bs = cfg.button_scale
-
-            objects += f"""
-    <body name="button_housing" pos="{bpos[0]} {bpos[1]} {bpos[2]}">
-      <!-- Housing box -->
-      <geom name="btn_base" type="box" size="{0.030*bs} {0.030*bs} {0.020*bs}"
-            rgba="0.30 0.30 0.35 1" mass="0.5"
-            contype="1" conaffinity="1"/>
-      <!-- Button plunger (slides down on press) -->
-      <body name="button_plunger" pos="0 0 {0.020*bs}">
-        <joint name="button_joint" type="slide" axis="0 0 -1"
-               range="0 {0.030*bs}" damping="5" stiffness="50"/>
-        <geom name="btn_cap" type="cylinder" size="{0.015*bs} {0.006*bs}"
-              rgba="0.90 0.15 0.15 1" mass="0.02"
-              contype="1" conaffinity="1"/>
-        <site name="btn_press_site" pos="0 0 0" size="0.002"/>
-      </body>
-      <!-- Target site (fully pressed pos) -->
-      <site name="btn_target" pos="0 0 {-0.005*bs}" size="0.002"
-            rgba="0 1 0 0.3"/>
     </body>
 """
 
@@ -1002,64 +933,23 @@ class PickPlaceEnv:
               size="{0.075*ds} {0.005*ds} {0.075*ds}"
               pos="{0.075*ds} 0 0" rgba="0.85 0.80 0.70 1"
               contype="1" conaffinity="1"/>
-        <!-- Door handle -->
-        <body name="door_handle_body" pos="{0.120*ds} {0.015*ds} 0">
-          <geom name="door_handle_geom" type="capsule" size="{0.008*ds}"
-                fromto="0 0 {-0.020*ds} 0 0 {0.020*ds}"
-                rgba="0.70 0.70 0.75 1"
+        <!-- Door handle (L-shaped lever, horizontal) -->
+        <body name="door_handle_body" pos="{0.120*ds} {-0.025*ds} 0">
+          <!-- Handle stem (sticks out from panel toward robot) -->
+          <geom name="door_handle_stem" type="capsule" size="{0.006*ds}"
+                fromto="0 0 0 0 {-0.045*ds} 0"
+                rgba="0.85 0.65 0.10 1"
                 contype="1" conaffinity="1"/>
-          <site name="door_handle_site" pos="0 0 0" size="0.002"/>
+          <!-- Handle bar (extends horizontally along X from stem tip - L shape) -->
+          <geom name="door_handle_geom" type="capsule" size="{0.007*ds}"
+                fromto="0 {-0.045*ds} 0 {-0.045*ds} {-0.045*ds} 0"
+                rgba="0.85 0.65 0.10 1"
+                contype="1" conaffinity="1"
+                solref="0.005 1" solimp="0.99 0.99 0.001" condim="4" friction="1 0.005 0.0001"/>
+          <site name="door_handle_site" pos="{-0.020*ds} {-0.045*ds} 0" size="0.002"/>
         </body>
       </body>
     </body>
-"""
-
-        elif self.task == "lever_pull":
-            # Lever pull: base with hinged lever arm (horizontal to vertical)
-            lpos = cfg.lever_pos
-            ls = cfg.lever_scale
-
-            objects += f"""
-    <body name="lever_base" pos="{lpos[0]} {lpos[1]} {lpos[2]}">
-      <!-- Base pedestal -->
-      <geom name="lever_base_geom" type="box" size="{0.025*ls} {0.025*ls} {0.040*ls}"
-            pos="0 0 {0.040*ls}" rgba="0.25 0.25 0.28 1" mass="0.5"
-            contype="1" conaffinity="1"/>
-      <!-- Lever arm (rotates around X-axis, starts horizontal) -->
-      <body name="lever_arm" pos="0 0 {0.080*ls}">
-        <joint name="lever_hinge" type="hinge" axis="1 0 0"
-               range="0 1.57" damping="0.3" armature="0.005" stiffness="0"/>
-        <!-- Arm capsule pointing in +Y (starts horizontal) -->
-        <geom name="lever_arm_geom" type="capsule" size="{0.010*ls}"
-              fromto="0 0 0 0 {0.120*ls} 0"
-              rgba="0.60 0.60 0.65 1" mass="0.05"
-              contype="1" conaffinity="1"/>
-        <!-- Tip sphere -->
-        <geom name="lever_tip_geom" type="sphere" size="{0.015*ls}"
-              pos="0 {0.120*ls} 0" rgba="1.0 0.60 0.0 1" mass="0.02"
-              contype="1" conaffinity="1"/>
-        <site name="lever_tip_site" pos="0 {0.120*ls} 0" size="0.002"/>
-      </body>
-    </body>
-"""
-
-        elif self.task == "sweep":
-            # Sweep: free-body puck + target zone
-            spos = cfg.sweep_obj_pos
-            stgt = cfg.sweep_target_pos
-
-            objects += f"""
-    <body name="sweep_obj" pos="{spos[0]} {spos[1]} {spos[2]}">
-      <freejoint name="sweep_obj_joint"/>
-      <geom name="sweep_obj_geom" type="cylinder" size="0.020 0.012"
-            mass="0.05" rgba="0.20 0.50 0.90 1"
-            friction="0.5 0.005 0.0001" solref="0.01 1"
-            contype="1" conaffinity="1"/>
-      <site name="sweep_obj_site" pos="0 0 0" size="0.002"/>
-    </body>
-
-    <site name="sweep_target" pos="{stgt[0]} {stgt[1]} {stgt[2]}"
-          size="0.03 0.03 0.001" type="box" rgba="0.2 0.9 0.2 0.4"/>
 """
 
         # For stacking task: inject a second cube (cube_B) at the target position
@@ -1362,11 +1252,6 @@ class PickPlaceEnv:
             self.model, mujoco.mjtObj.mjOBJ_JOINT, "cube_b_joint"
         )
 
-        # Reach target site
-        self._reach_target_site_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SITE, "reach_target"
-        )
-
         # Peg insertion objects
         self._peg_body_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_BODY, "peg"
@@ -1389,36 +1274,12 @@ class PickPlaceEnv:
             self.model, mujoco.mjtObj.mjOBJ_BODY, "faucet_switch"
         )
 
-        # Button press objects
-        self._button_joint_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_JOINT, "button_joint"
-        )
-        self._button_plunger_body_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_BODY, "button_plunger"
-        )
-
         # Door open objects
         self._door_hinge_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_JOINT, "door_hinge"
         )
         self._door_handle_site_id = mujoco.mj_name2id(
             self.model, mujoco.mjtObj.mjOBJ_SITE, "door_handle_site"
-        )
-
-        # Lever pull objects
-        self._lever_hinge_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_JOINT, "lever_hinge"
-        )
-        self._lever_tip_site_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SITE, "lever_tip_site"
-        )
-
-        # Sweep objects
-        self._sweep_obj_body_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_BODY, "sweep_obj"
-        )
-        self._sweep_target_site_id = mujoco.mj_name2id(
-            self.model, mujoco.mjtObj.mjOBJ_SITE, "sweep_target"
         )
 
         # Camera
@@ -1766,12 +1627,6 @@ class PickPlaceEnv:
             self.data.qpos[cb_qpos_adr] += dx
             self.data.qpos[cb_qpos_adr + 1] += dy
 
-        # Randomize reach target (move the site)
-        if self.task == "reach" and self._reach_target_site_id >= 0:
-            r = self.cfg.cube_randomize_range
-            self.model.site_pos[self._reach_target_site_id][0] += self._rng.uniform(-r, r)
-            self.model.site_pos[self._reach_target_site_id][1] += self._rng.uniform(-r, r)
-
         # Randomize peg start position
         if self._peg_joint_id >= 0:
             peg_qpos_adr = self.model.jnt_qposadr[self._peg_joint_id]
@@ -1790,8 +1645,9 @@ class PickPlaceEnv:
         Execute one control step.
 
         Args:
-            action: (4,) array [dx, dy, dz, gripper]
+            action: (5,) array [dx, dy, dz, d_yaw, gripper]
                 dx, dy, dz: EE position deltas in meters
+                d_yaw: EE yaw rotation delta in radians (around world Z)
                 gripper: 0.0 = open, 1.0 = closed
 
         Returns:
@@ -1802,13 +1658,20 @@ class PickPlaceEnv:
             info: dict with 'success' key
         """
         action = np.asarray(action, dtype=np.float64)
-        assert action.shape == (4,), f"Expected action shape (4,), got {action.shape}"
+        assert action.shape == (5,), f"Expected action shape (5,), got {action.shape}"
 
         ee_delta = np.clip(action[:3], -self.cfg.action_scale, self.cfg.action_scale)
-        grip_cmd = np.clip(action[3], 0.0, 1.0)
+        yaw_delta = np.clip(action[3], -0.1, 0.1)  # max 0.1 rad/step (~5.7 deg)
+        grip_cmd = np.clip(action[4], 0.0, 1.0)
 
         # Accumulate desired EE position
         self._ee_target = self._ee_target + ee_delta
+
+        # Apply yaw rotation to target orientation
+        if abs(yaw_delta) > 1e-6:
+            c, s = np.cos(yaw_delta), np.sin(yaw_delta)
+            Rz = np.array([[c, -s, 0], [s, c, 0], [0, 0, 1]])
+            self._target_ee_mat = Rz @ self._target_ee_mat
 
         # IK → joint positions (6-DOF IK with orientation constraint
         # produces unique, continuous solutions — no drift clamp or
@@ -1874,9 +1737,7 @@ class PickPlaceEnv:
 
     def _check_success(self) -> bool:
         """Check task-specific success condition."""
-        if self.task == "reach":
-            return self._check_reach_success()
-        elif self.task == "push":
+        if self.task == "push":
             return self._check_push_success()
         elif self.task == "stack":
             return self._check_stack_success()
@@ -1887,14 +1748,8 @@ class PickPlaceEnv:
             return self._check_drawer_open_success()
         elif self.task == "turn_faucet":
             return self._check_turn_faucet_success()
-        elif self.task == "button_press":
-            return self._check_button_press_success()
         elif self.task == "door_open":
             return self._check_door_open_success()
-        elif self.task == "lever_pull":
-            return self._check_lever_pull_success()
-        elif self.task == "sweep":
-            return self._check_sweep_success()
 
         # Default: pick_place
         if self._cube_body_id < 0 or self._target_site_id < 0:
@@ -1909,15 +1764,6 @@ class PickPlaceEnv:
         height_ok = abs(cube_pos[2] - target_pos[2]) < 0.03
 
         return dist_xy < self.cfg.success_threshold and height_ok
-
-    def _check_reach_success(self) -> bool:
-        """Check if EE reached the target position."""
-        if self._reach_target_site_id < 0:
-            return False
-        ee_pos = self._get_ee_pos()
-        target_pos = self.data.site_xpos[self._reach_target_site_id]
-        dist = np.linalg.norm(ee_pos - target_pos)
-        return dist < 0.02  # 2cm tolerance
 
     def _check_push_success(self) -> bool:
         """Check if cube was pushed to the target zone."""
@@ -2024,12 +1870,6 @@ class PickPlaceEnv:
             return self.data.site_xpos[self._target_site_id].copy()
         return np.zeros(3)
 
-    def get_reach_target_pos(self) -> np.ndarray:
-        """Get reach target position."""
-        if self._reach_target_site_id >= 0:
-            return self.data.site_xpos[self._reach_target_site_id].copy()
-        return np.zeros(3)
-
     def get_peg_pos(self) -> np.ndarray:
         """Get current peg position (for peg insertion policy)."""
         if self._peg_body_id >= 0:
@@ -2041,25 +1881,6 @@ class PickPlaceEnv:
         if self._hole_bottom_site_id >= 0:
             return self.data.site_xpos[self._hole_bottom_site_id].copy()
         return np.zeros(3)
-
-    # ------------------------------------------------------------------
-    # Button press
-    # ------------------------------------------------------------------
-
-    def get_button_displacement(self) -> float:
-        """Get current button joint displacement (meters pressed)."""
-        if self._button_joint_id >= 0:
-            qpos_addr = self.model.jnt_qposadr[self._button_joint_id]
-            return float(self.data.qpos[qpos_addr])
-        return 0.0
-
-    def _check_button_press_success(self) -> bool:
-        """Success when button is pressed >= 66% of its travel range."""
-        if self._button_joint_id < 0:
-            return False
-        displacement = self.get_button_displacement()
-        max_travel = 0.030 * self.cfg.button_scale
-        return displacement >= max_travel * 0.66
 
     # ------------------------------------------------------------------
     # Door open
@@ -2083,48 +1904,6 @@ class PickPlaceEnv:
         if self._door_hinge_id < 0:
             return False
         return self.get_door_angle() >= 1.047
-
-    # ------------------------------------------------------------------
-    # Lever pull
-    # ------------------------------------------------------------------
-
-    def get_lever_angle(self) -> float:
-        """Get current lever hinge angle (radians, 0=horizontal, pi/2=vertical)."""
-        if self._lever_hinge_id >= 0:
-            qpos_addr = self.model.jnt_qposadr[self._lever_hinge_id]
-            return float(self.data.qpos[qpos_addr])
-        return 0.0
-
-    def get_lever_tip_pos(self) -> np.ndarray:
-        """Get lever tip site position."""
-        if self._lever_tip_site_id >= 0:
-            return self.data.site_xpos[self._lever_tip_site_id].copy()
-        return np.zeros(3)
-
-    def _check_lever_pull_success(self) -> bool:
-        """Success when lever is pulled >= 75 degrees (~1.31 rad)."""
-        if self._lever_hinge_id < 0:
-            return False
-        return self.get_lever_angle() >= 1.31
-
-    # ------------------------------------------------------------------
-    # Sweep
-    # ------------------------------------------------------------------
-
-    def get_sweep_obj_pos(self) -> np.ndarray:
-        """Get sweep object body position."""
-        if self._sweep_obj_body_id >= 0:
-            return self.data.xpos[self._sweep_obj_body_id].copy()
-        return np.zeros(3)
-
-    def _check_sweep_success(self) -> bool:
-        """Success when object is within 3cm of target zone (XY)."""
-        if self._sweep_obj_body_id < 0 or self._sweep_target_site_id < 0:
-            return False
-        obj_pos = self.data.xpos[self._sweep_obj_body_id][:2]
-        target_pos = self.data.site_xpos[self._sweep_target_site_id][:2]
-        dist = np.linalg.norm(obj_pos - target_pos)
-        return dist <= 0.03
 
     def close(self):
         """Clean up resources."""

@@ -81,8 +81,9 @@ class DrawerOpenTask(BaseTask):
         <!-- Bar handle (horizontal, centered on front panel) -->
         <geom name="handle_bar" type="capsule" size="0.006"
               fromto="-{handle_half_len} -{cab_d + handle_offset} 0 {handle_half_len} -{cab_d + handle_offset} 0"
-              mass="0.02" rgba="0.75 0.75 0.75 1" condim="6"
-              friction="2.0 0.1 0.01" contype="1" conaffinity="1" />
+              mass="0.02" rgba="0.75 0.75 0.75 1"
+              contype="1" conaffinity="1"
+              solref="0.005 1" solimp="0.99 0.99 0.001" condim="4" friction="1 0.005 0.0001" />
         <!-- Handle connectors -->
         <geom name="handle_conn_l" type="cylinder" size="0.005 {handle_offset/2}"
               pos="-{handle_half_len} -{cab_d + handle_offset/2} 0" euler="1.5708 0 0"
