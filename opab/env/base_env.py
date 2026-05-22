@@ -262,6 +262,7 @@ class RobotConfig:
                 "sideview_0": {"lookat": [0.15, 0.0, 0.45], "distance": 0.70, "azimuth": 150, "elevation": -22},
                 "agentview_0": {"pos": [-0.05, 0.0, 1.2], "xyaxes": "0 -1 0 0.906 0 0.423", "fovy": 60},
                 "topdown_0": {"pos": [0.20, 0.0, 1.2], "xyaxes": "1 0 0 0 1 0", "fovy": 60},
+                "wrist_0": {"attached": "gripper_body", "fovy": 75},
             }
             # Peg insertion parameters
             self.peg_radius = 0.008
@@ -501,6 +502,41 @@ class PickPlaceEnv:
                 idx_b = xml.find(target_body)
                 end_tag = xml.find('>', idx_b)
                 xml = xml[:end_tag+1] + '\n          ' + inject_site + xml[end_tag+1:]
+
+        # For Lite6: inject wrist camera on gripper_body (eye-in-hand)
+        # pos="0 0 -0.005" — just behind gripper body mesh (~8.6cm from fingertips)
+        # xyaxes="1 0 0 0 -1 0" — look along +Z (toward fingertips/workspace below)
+        # FOV=75° (wider than workspace cameras for close-up visibility)
+        # Visual: dark box+cylinder primitives that protrude clearly above gripper housing
+        if self.cfg.name == "lite6":
+            # Dark material for camera visual
+            cam_assets = (
+                '\n  <material name="wrist_cam_mat" rgba="0.1 0.1 0.12 1" specular="0.3" shininess="0.2"/>'
+                '\n  <material name="wrist_cam_lens_mat" rgba="0.02 0.02 0.05 1" specular="0.8" shininess="0.9"/>'
+            )
+            if "</asset>" in xml:
+                last_asset_idx = xml.rfind("</asset>")
+                xml = xml[:last_asset_idx] + cam_assets + '\n' + xml[last_asset_idx:]
+
+            wrist_cam_xml = (
+                # Functional camera — at the bottom tip of the camera mesh visual
+                # Camera mesh center: (0.056, 0, -0.015), half-z=0.009
+                # Bottom face (toward workspace): z = -0.015 + 0.009 = -0.006
+                # Tilted ~45° inward toward gripper so it sees fingers + objects
+                '\n                    <camera name="wrist_0" pos="0.056 0 -0.006" xyaxes="0.707 0 0.707 0 -1 0" fovy="75"/>'
+                # Camera visual — dark box mounted to the side of gripper housing
+                '\n                    <geom name="wrist_cam_body" type="box" size="0.018 0.014 0.009"'
+                ' material="wrist_cam_mat" pos="0.056 0 -0.015"'
+                ' contype="0" conaffinity="0" group="0"/>'
+                '\n                    <geom name="wrist_cam_lens" type="cylinder" size="0.006 0.004"'
+                ' material="wrist_cam_lens_mat" pos="0.056 0 -0.003" euler="0 0 0"'
+                ' contype="0" conaffinity="0" group="0"/>'
+            )
+            target_body = '<body name="gripper_body"'
+            if target_body in xml:
+                idx_b = xml.find(target_body)
+                end_tag = xml.find('>', idx_b)
+                xml = xml[:end_tag+1] + wrist_cam_xml + xml[end_tag+1:]
 
 
         # Override floor: replace checker material with clean light warm gray
